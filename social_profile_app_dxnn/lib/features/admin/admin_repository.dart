@@ -8,6 +8,30 @@ import '../../core/supabase.dart';
 import '../posts/posts_repository.dart';
 
 class AdminRepository {
+  Future<void> createDriveLinkPoster({
+    required String driveUrl,
+    required PostPlatform platform,
+    required PostKind kind,
+    String? caption,
+  }) async {
+    try {
+      await supabase.from('posts').insert(<String, dynamic>{
+        'platform': platform.name,
+        'kind': kind.name,
+        'caption': (caption?.trim().isEmpty ?? true) ? null : caption!.trim(),
+        'media_path': driveUrl.trim(),
+      });
+
+      log.info('Poster Drive ajouté', <String, Object>{
+        'platform': platform.name,
+        'kind': kind.name,
+      });
+    } catch (error, stack) {
+      log.error("Ajout d'un poster Drive impossible", error, stack);
+      rethrow;
+    }
+  }
+
   Future<void> createPoster({
     required Uint8List bytes,
     required String extension,
@@ -66,13 +90,14 @@ class AdminRepository {
     String? caption,
     Uint8List? bytes,
     String? extension,
+    String? driveLink,
   }) async {
     final StorageFileApi storage = supabase.storage.from('posters');
     String? newMediaPath;
     bool databaseUpdated = false;
 
     try {
-      if (bytes != null && extension != null) {
+      if (bytes != null && extension != null && kind != PostKind.explication) {
         newMediaPath =
             '${DateTime.now().toUtc().microsecondsSinceEpoch}.$extension';
         await storage.uploadBinary(
@@ -86,23 +111,27 @@ class AdminRepository {
         );
       }
 
-      await supabase
-          .from('posts')
-          .update(<String, dynamic>{
-            'platform': platform.name,
-            'kind': kind.name,
-            'caption': (caption?.trim().isEmpty ?? true)
-                ? null
-                : caption!.trim(),
-            if (newMediaPath case final String mediaPath)
-              'media_path': mediaPath,
-          })
-          .eq('id', id);
+      final Map<String, dynamic> updateData = <String, dynamic>{
+        'platform': platform.name,
+        'kind': kind.name,
+        'caption': (caption?.trim().isEmpty ?? true)
+            ? null
+            : caption!.trim(),
+      };
+      if (kind == PostKind.explication && driveLink != null && driveLink.trim().isNotEmpty) {
+        updateData['media_path'] = driveLink.trim();
+      } else if (newMediaPath case final String mediaPath) {
+        updateData['media_path'] = mediaPath;
+      }
+
+      await supabase.from('posts').update(updateData).eq('id', id);
       databaseUpdated = true;
 
       if (newMediaPath != null) {
         try {
-          await storage.remove(<String>[oldMediaPath]);
+          if (!(oldMediaPath.startsWith('http://') || oldMediaPath.startsWith('https://'))) {
+            await storage.remove(<String>[oldMediaPath]);
+          }
         } catch (cleanupError) {
           log.warn('Nettoyage de l’ancien poster impossible', cleanupError);
         }
@@ -130,7 +159,13 @@ class AdminRepository {
   }) async {
     try {
       await supabase.from('posts').delete().eq('id', id);
-      await supabase.storage.from('posters').remove(<String>[mediaPath]);
+      if (!(mediaPath.startsWith('http://') || mediaPath.startsWith('https://'))) {
+        try {
+          await supabase.storage.from('posters').remove(<String>[mediaPath]);
+        } catch (cleanupError) {
+          log.warn('Nettoyage du fichier poster impossible', cleanupError);
+        }
+      }
       log.info('Poster supprimé', <String, Object>{'id': id});
     } catch (error, stack) {
       log.error('Suppression du poster impossible', error, stack);

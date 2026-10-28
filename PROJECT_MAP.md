@@ -195,7 +195,7 @@ supabase/
 create type user_role     as enum ('admin','user');
 create type stat_platform as enum ('facebook','youtube','tiktok','instagram');
 create type post_platform as enum ('whatsapp','facebook','instagram');
-create type post_kind     as enum ('post','reel');
+create type post_kind     as enum ('post','reel','explication');
 
 -- Utilisateurs de l'app (rôle uniquement ; l'identité vient de auth.users)
 create table profiles (

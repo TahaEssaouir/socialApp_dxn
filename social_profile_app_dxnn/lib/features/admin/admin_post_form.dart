@@ -29,6 +29,7 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _captionController = TextEditingController();
+  final TextEditingController _driveLinkController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
   PostPlatform _platform = PostPlatform.instagram;
@@ -54,6 +55,7 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
   @override
   void dispose() {
     _captionController.dispose();
+    _driveLinkController.dispose();
     super.dispose();
   }
 
@@ -112,9 +114,18 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
 
     final Uint8List? bytes = _bytes;
     final String? extension = _extension;
-    if (!_isEditing && (bytes == null || extension == null)) {
-      setState(() => _error = 'Choisissez une image avant de publier.');
-      return;
+    final String driveLink = _driveLinkController.text.trim();
+
+    if (_kind == PostKind.explication) {
+      if (!_isEditing && driveLink.isEmpty) {
+        setState(() => _error = 'Indiquez le lien Google Drive direct pour cette explication.');
+        return;
+      }
+    } else {
+      if (!_isEditing && (bytes == null || extension == null)) {
+        setState(() => _error = 'Choisissez une image avant de publier.');
+        return;
+      }
     }
 
     setState(() {
@@ -134,17 +145,29 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
               caption: _captionController.text,
               bytes: bytes,
               extension: extension,
+              driveLink: _kind == PostKind.explication ? driveLink : null,
             );
       } else {
-        await ref
-            .read(adminRepositoryProvider)
-            .createPoster(
-              bytes: bytes!,
-              extension: extension!,
-              platform: _platform,
-              kind: _kind,
-              caption: _captionController.text,
-            );
+        if (_kind == PostKind.explication) {
+          await ref
+              .read(adminRepositoryProvider)
+              .createDriveLinkPoster(
+                driveUrl: driveLink,
+                platform: _platform,
+                kind: _kind,
+                caption: _captionController.text,
+              );
+        } else {
+          await ref
+              .read(adminRepositoryProvider)
+              .createPoster(
+                bytes: bytes!,
+                extension: extension!,
+                platform: _platform,
+                kind: _kind,
+                caption: _captionController.text,
+              );
+        }
       }
 
       if (!mounted) return;
@@ -268,6 +291,42 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                           },
                   ),
                   const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Icon(Icons.info_outline, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Image depuis Google Drive',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '1. Google Drive → Sélectionner ton image\n'
+                          '2. Clic droit → Partager → Accès : « Toute personne disposant du lien peut consulter »\n'
+                          '3. Copier le lien (il contient l\'ID du fichier)\n'
+                          '4. Utiliser le lien direct : https://drive.google.com/uc?export=view&id=ID_DU_FICHIER',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white70,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   TextFormField(
                     controller: _captionController,
                     enabled: !_submitting,
@@ -286,7 +345,28 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                     },
                   ),
                   const SizedBox(height: 8),
-                  if (_bytes == null)
+                  if (_kind == PostKind.explication) ...<Widget>[
+                    TextFormField(
+                      controller: _driveLinkController,
+                      enabled: !_submitting,
+                      decoration: const InputDecoration(
+                        labelText: 'Lien Google Drive direct',
+                        hintText: 'https://drive.google.com/uc?export=view&id=...',
+                        prefixIcon: Icon(Icons.link),
+                      ),
+                      validator: (String? value) {
+                        if (_kind != PostKind.explication) return null;
+                        final String v = (value ?? '').trim();
+                        if (v.isEmpty) {
+                          return 'Lien requis pour une explication.';
+                        }
+                        if (!(v.startsWith('http://') || v.startsWith('https://'))) {
+                          return 'Lien invalide.';
+                        }
+                        return null;
+                      },
+                    ),
+                  ] else if (_bytes == null)
                     OutlinedButton.icon(
                       onPressed: _submitting ? null : _pickImage,
                       icon: const Icon(Icons.image_outlined),

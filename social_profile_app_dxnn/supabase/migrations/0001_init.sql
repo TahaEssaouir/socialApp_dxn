@@ -5,7 +5,7 @@
 create type public.user_role as enum ('admin', 'user');
 create type public.stat_platform as enum ('facebook', 'youtube', 'tiktok', 'instagram');
 create type public.post_platform as enum ('whatsapp', 'facebook', 'instagram');
-create type public.post_kind as enum ('post', 'reel');
+create type public.post_kind as enum ('post', 'reel', 'explication');
 
 create table public.profiles (
   id         uuid primary key references auth.users (id) on delete cascade,

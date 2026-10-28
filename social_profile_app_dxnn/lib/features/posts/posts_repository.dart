@@ -30,7 +30,7 @@ extension PostPlatformX on PostPlatform {
   }
 }
 
-enum PostKind { post, reel }
+enum PostKind { post, reel, explication }
 
 extension PostKindX on PostKind {
   String get label {
@@ -39,6 +39,8 @@ extension PostKindX on PostKind {
         return 'Post';
       case PostKind.reel:
         return 'Reel';
+      case PostKind.explication:
+        return 'Explication';
     }
   }
 
@@ -48,6 +50,8 @@ extension PostKindX on PostKind {
         return 'Publications';
       case PostKind.reel:
         return 'Reels';
+      case PostKind.explication:
+        return 'Explications';
     }
   }
 }
