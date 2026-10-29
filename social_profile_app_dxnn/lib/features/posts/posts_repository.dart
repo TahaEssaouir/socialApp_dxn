@@ -64,6 +64,9 @@ class PostItem {
     required this.mediaPath,
     required this.createdAt,
     this.caption,
+    this.facebookLink,
+    this.instagramLink,
+    this.externalLink,
   });
 
   final String id;
@@ -72,6 +75,9 @@ class PostItem {
   final String mediaPath;
   final DateTime createdAt;
   final String? caption;
+  final String? facebookLink;
+  final String? instagramLink;
+  final String? externalLink;
 
   factory PostItem.fromMap(Map<String, dynamic> map) {
     return PostItem(
@@ -81,6 +87,9 @@ class PostItem {
       mediaPath: map['media_path'] as String,
       createdAt: DateTime.parse(map['created_at'] as String).toUtc(),
       caption: map['caption'] as String?,
+      facebookLink: map['facebook_link'] as String?,
+      instagramLink: map['instagram_link'] as String?,
+      externalLink: map['external_link'] as String?,
     );
   }
 }

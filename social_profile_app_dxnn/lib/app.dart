@@ -85,9 +85,11 @@ class SocialApp extends ConsumerWidget {
 ThemeData buildAppTheme() {
   final ColorScheme scheme =
       ColorScheme.fromSeed(
-        seedColor: const Color(0xFF0095F6),
+        seedColor: const Color(0xFF98C3F5),
         brightness: Brightness.dark,
       ).copyWith(
+        primary: const Color(0xFF98C3F5),
+        onPrimary: Colors.black,
         surface: Colors.black,
         surfaceContainerHighest: const Color(0xFF1A1A1A),
         outline: const Color(0xFF262626),
@@ -136,14 +138,20 @@ ThemeData buildAppTheme() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFF98C3F5),
+        foregroundColor: Colors.black,
         minimumSize: const Size.fromHeight(48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: const Color(0xFF98C3F5)),
+    ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size.fromHeight(46),
-        side: const BorderSide(color: Color(0xFF363636)),
+        foregroundColor: const Color(0xFF98C3F5),
+        side: const BorderSide(color: Color(0xFF98C3F5)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),

@@ -8,6 +8,16 @@ import '../../core/supabase.dart';
 import '../posts/posts_repository.dart';
 
 class AdminRepository {
+  String? _normalizeSocialLink(String? value) {
+    if (value == null) return null;
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    if (!(trimmed.startsWith('http://') || trimmed.startsWith('https://'))) {
+      return null;
+    }
+    return trimmed;
+  }
+
   Future<void> createDriveLinkPoster({
     required String driveUrl,
     required PostPlatform platform,
@@ -38,6 +48,9 @@ class AdminRepository {
     required PostPlatform platform,
     required PostKind kind,
     String? caption,
+    String? facebookLink,
+    String? instagramLink,
+    String? externalLink,
   }) async {
     final String contentType = _contentType(extension);
     final String path =
@@ -62,6 +75,8 @@ class AdminRepository {
         'kind': kind.name,
         'caption': (caption?.trim().isEmpty ?? true) ? null : caption!.trim(),
         'media_path': path,
+        'facebook_link': _normalizeSocialLink(facebookLink),
+        'instagram_link': _normalizeSocialLink(instagramLink),
       });
 
       log.info('Poster publié', <String, Object>{
@@ -91,6 +106,9 @@ class AdminRepository {
     Uint8List? bytes,
     String? extension,
     String? driveLink,
+    String? facebookLink,
+    String? instagramLink,
+    String? externalLink,
   }) async {
     final StorageFileApi storage = supabase.storage.from('posters');
     String? newMediaPath;
@@ -114,11 +132,13 @@ class AdminRepository {
       final Map<String, dynamic> updateData = <String, dynamic>{
         'platform': platform.name,
         'kind': kind.name,
-        'caption': (caption?.trim().isEmpty ?? true)
-            ? null
-            : caption!.trim(),
+        'caption': (caption?.trim().isEmpty ?? true) ? null : caption!.trim(),
+        'facebook_link': _normalizeSocialLink(facebookLink),
+        'instagram_link': _normalizeSocialLink(instagramLink),
       };
-      if (kind == PostKind.explication && driveLink != null && driveLink.trim().isNotEmpty) {
+      if (kind == PostKind.explication &&
+          driveLink != null &&
+          driveLink.trim().isNotEmpty) {
         updateData['media_path'] = driveLink.trim();
       } else if (newMediaPath case final String mediaPath) {
         updateData['media_path'] = mediaPath;
@@ -129,7 +149,8 @@ class AdminRepository {
 
       if (newMediaPath != null) {
         try {
-          if (!(oldMediaPath.startsWith('http://') || oldMediaPath.startsWith('https://'))) {
+          if (!(oldMediaPath.startsWith('http://') ||
+              oldMediaPath.startsWith('https://'))) {
             await storage.remove(<String>[oldMediaPath]);
           }
         } catch (cleanupError) {
@@ -159,7 +180,8 @@ class AdminRepository {
   }) async {
     try {
       await supabase.from('posts').delete().eq('id', id);
-      if (!(mediaPath.startsWith('http://') || mediaPath.startsWith('https://'))) {
+      if (!(mediaPath.startsWith('http://') ||
+          mediaPath.startsWith('https://'))) {
         try {
           await supabase.storage.from('posters').remove(<String>[mediaPath]);
         } catch (cleanupError) {
@@ -182,6 +204,12 @@ class AdminRepository {
         return 'image/png';
       case 'webp':
         return 'image/webp';
+      case 'mp4':
+        return 'video/mp4';
+      case 'mov':
+        return 'video/quicktime';
+      case 'webm':
+        return 'video/webm';
       default:
         throw ArgumentError.value(
           extension,

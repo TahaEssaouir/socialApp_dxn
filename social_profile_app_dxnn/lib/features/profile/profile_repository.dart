@@ -24,6 +24,19 @@ extension StatPlatformX on StatPlatform {
     }
   }
 
+  String? get officialUrl {
+    switch (this) {
+      case StatPlatform.facebook:
+        return 'https://www.facebook.com/daxenmoroccoOfficial';
+      case StatPlatform.youtube:
+        return 'https://www.youtube.com/@dxnmoroccoofficial';
+      case StatPlatform.tiktok:
+        return null;
+      case StatPlatform.instagram:
+        return 'https://www.instagram.com/daxenmorocco.llc/';
+    }
+  }
+
   IconData get icon {
     switch (this) {
       case StatPlatform.facebook:
@@ -173,11 +186,10 @@ class ProfileRepository {
   }
 
   List<SocialStat> _sorted(List<SocialStat> stats) {
-    return List<SocialStat>.of(stats)
-      ..sort(
-        (SocialStat a, SocialStat b) =>
-            a.platform.index.compareTo(b.platform.index),
-      );
+    return List<SocialStat>.of(stats)..sort(
+      (SocialStat a, SocialStat b) =>
+          a.platform.index.compareTo(b.platform.index),
+    );
   }
 
   Future<List<SocialStat>?> _readCache() async {

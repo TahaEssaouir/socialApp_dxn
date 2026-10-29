@@ -41,12 +41,16 @@ void main() {
       'kind': 'reel',
       'caption': 'Nouveau poster',
       'media_path': 'posters/abc.jpg',
+      'facebook_link': 'https://facebook.com/post/abc',
+      'instagram_link': 'https://instagram.com/p/abc',
       'created_at': '2026-10-26T10:00:00+00:00',
     });
 
     expect(post.platform, PostPlatform.whatsapp);
     expect(post.kind, PostKind.reel);
     expect(post.caption, 'Nouveau poster');
+    expect(post.facebookLink, 'https://facebook.com/post/abc');
+    expect(post.instagramLink, 'https://instagram.com/p/abc');
     expect(post.createdAt, DateTime.utc(2026, 10, 26, 10));
   });
 

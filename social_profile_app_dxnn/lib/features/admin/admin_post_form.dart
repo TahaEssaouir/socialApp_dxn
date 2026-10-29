@@ -26,10 +26,14 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
     'png',
     'webp',
   };
-
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _captionController = TextEditingController();
   final TextEditingController _driveLinkController = TextEditingController();
+  final TextEditingController _explicationNameController =
+      TextEditingController();
+  final TextEditingController _facebookLinkController = TextEditingController();
+  final TextEditingController _instagramLinkController =
+      TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
   PostPlatform _platform = PostPlatform.instagram;
@@ -49,6 +53,8 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
       _platform = post.platform;
       _kind = post.kind;
       _captionController.text = post.caption ?? '';
+      _facebookLinkController.text = post.facebookLink ?? '';
+      _instagramLinkController.text = post.instagramLink ?? '';
     }
   }
 
@@ -56,6 +62,9 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
   void dispose() {
     _captionController.dispose();
     _driveLinkController.dispose();
+    _explicationNameController.dispose();
+    _facebookLinkController.dispose();
+    _instagramLinkController.dispose();
     super.dispose();
   }
 
@@ -71,7 +80,7 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
       final int length = await picked.length();
       if (length > _maxBytes) {
         if (!mounted) return;
-        setState(() => _error = 'Image trop lourde : 10 Mo maximum.');
+        setState(() => _error = 'Fichier trop lourd : 10 Mo maximum.');
         return;
       }
 
@@ -87,7 +96,7 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
       final Uint8List bytes = await picked.readAsBytes();
       if (bytes.length > _maxBytes) {
         if (!mounted) return;
-        setState(() => _error = 'Image trop lourde : 10 Mo maximum.');
+        setState(() => _error = 'Fichier trop lourd : 10 Mo maximum.');
         return;
       }
 
@@ -115,15 +124,34 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
     final Uint8List? bytes = _bytes;
     final String? extension = _extension;
     final String driveLink = _driveLinkController.text.trim();
+    final String facebookLink = _facebookLinkController.text.trim();
+    final String instagramLink = _instagramLinkController.text.trim();
 
     if (_kind == PostKind.explication) {
-      if (!_isEditing && driveLink.isEmpty) {
-        setState(() => _error = 'Indiquez le lien Google Drive direct pour cette explication.');
+      final String name = _explicationNameController.text.trim();
+      if (!_isEditing && (name.isEmpty || driveLink.isEmpty)) {
+        setState(
+          () => _error =
+              'Indiquez le nom et le lien Google Drive pour cette explication.',
+        );
         return;
       }
     } else {
+      if (_kind == PostKind.reel &&
+          facebookLink.isEmpty &&
+          instagramLink.isEmpty) {
+        setState(
+          () => _error =
+              'Saisissez au moins le lien Facebook ou le lien Instagram.',
+        );
+        return;
+      }
       if (!_isEditing && (bytes == null || extension == null)) {
-        setState(() => _error = 'Choisissez une image avant de publier.');
+        setState(
+          () => _error = _kind == PostKind.reel
+              ? 'Choisissez une miniature pour le Reel.'
+              : 'Choisissez une image avant de publier.',
+        );
         return;
       }
     }
@@ -142,10 +170,15 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
               oldMediaPath: widget.post!.mediaPath,
               platform: _platform,
               kind: _kind,
-              caption: _captionController.text,
+              caption: _kind == PostKind.explication
+                  ? _explicationNameController.text.trim()
+                  : _captionController.text,
               bytes: bytes,
               extension: extension,
               driveLink: _kind == PostKind.explication ? driveLink : null,
+              facebookLink: facebookLink.isEmpty ? null : facebookLink,
+              instagramLink: instagramLink.isEmpty ? null : instagramLink,
+              externalLink: null,
             );
       } else {
         if (_kind == PostKind.explication) {
@@ -155,7 +188,7 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                 driveUrl: driveLink,
                 platform: _platform,
                 kind: _kind,
-                caption: _captionController.text,
+                caption: _explicationNameController.text.trim(),
               );
         } else {
           await ref
@@ -166,6 +199,9 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                 platform: _platform,
                 kind: _kind,
                 caption: _captionController.text,
+                facebookLink: facebookLink.isEmpty ? null : facebookLink,
+                instagramLink: instagramLink.isEmpty ? null : instagramLink,
+                externalLink: null,
               );
         }
       }
@@ -229,13 +265,24 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                 padding: const EdgeInsets.all(20),
                 children: <Widget>[
                   Text(
-                    _isEditing ? 'Modifier un poster' : 'Publier un poster',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                    _kind == PostKind.explication
+                        ? (_isEditing
+                              ? 'Modifier une explication'
+                              : 'Ajouter une explication')
+                        : (_isEditing
+                              ? 'Modifier un poster'
+                              : 'Publier un poster'),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'JPEG, PNG ou WebP · 10 Mo maximum.',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                  Text(
+                    _kind == PostKind.explication
+                        ? 'Indiquez le nom et le lien du dossier Google Drive.'
+                        : 'JPEG, PNG ou WebP · 10 Mo maximum.',
+                    style: const TextStyle(color: Colors.white54, fontSize: 13),
                   ),
                   const SizedBox(height: 24),
                   DropdownButtonFormField<PostPlatform>(
@@ -291,67 +338,127 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                           },
                   ),
                   const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white10,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Icon(Icons.info_outline, size: 18),
-                            SizedBox(width: 8),
-                            Text(
-                              'Image depuis Google Drive',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          '1. Google Drive → Sélectionner ton image\n'
-                          '2. Clic droit → Partager → Accès : « Toute personne disposant du lien peut consulter »\n'
-                          '3. Copier le lien (il contient l\'ID du fichier)\n'
-                          '4. Utiliser le lien direct : https://drive.google.com/uc?export=view&id=ID_DU_FICHIER',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white70,
-                            height: 1.4,
+                  if (_kind == PostKind.post)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Icon(Icons.info_outline, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Image depuis Google Drive',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                          SizedBox(height: 8),
+                          Text(
+                            '1. Google Drive → Sélectionner ton image\n'
+                            '2. Clic droit → Partager → Accès : « Toute personne disposant du lien peut consulter »\n'
+                            '3. Copier le lien (il contient l\'ID du fichier)\n'
+                            '4. Utiliser le lien direct : https://drive.google.com/uc?export=view&id=ID_DU_FICHIER',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white70,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _captionController,
-                    enabled: !_submitting,
-                    maxLength: 2200,
-                    maxLines: 3,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: 'Légende (optionnelle)',
-                      alignLabelWithHint: true,
+                  if (_kind == PostKind.post) const SizedBox(height: 14),
+                  if (_kind != PostKind.explication)
+                    TextFormField(
+                      controller: _captionController,
+                      enabled: !_submitting,
+                      maxLength: 2200,
+                      maxLines: 3,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: 'Légende (optionnelle)',
+                        alignLabelWithHint: true,
+                      ),
+                      validator: (String? value) {
+                        if (value != null && value.length > 2200) {
+                          return 'La légende dépasse 2200 caractères.';
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (String? value) {
-                      if (value != null && value.length > 2200) {
-                        return 'La légende dépasse 2200 caractères.';
-                      }
-                      return null;
-                    },
-                  ),
+                  if (_kind != PostKind.explication) ...<Widget>[
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _facebookLinkController,
+                      enabled: !_submitting,
+                      decoration: const InputDecoration(
+                        labelText: 'Lien du poster Facebook',
+                        hintText: 'https://facebook.com/...',
+                        prefixIcon: Icon(Icons.facebook),
+                      ),
+                      validator: (String? value) {
+                        final String v = (value ?? '').trim();
+                        if (v.isEmpty) return null;
+                        if (!(v.startsWith('http://') ||
+                            v.startsWith('https://'))) {
+                          return 'Lien Facebook invalide.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _instagramLinkController,
+                      enabled: !_submitting,
+                      decoration: const InputDecoration(
+                        labelText: 'Lien du poster Instagram',
+                        hintText: 'https://instagram.com/...',
+                        prefixIcon: Icon(Icons.camera_alt_outlined),
+                      ),
+                      validator: (String? value) {
+                        final String v = (value ?? '').trim();
+                        if (v.isEmpty) return null;
+                        if (!(v.startsWith('http://') ||
+                            v.startsWith('https://'))) {
+                          return 'Lien Instagram invalide.';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   if (_kind == PostKind.explication) ...<Widget>[
+                    TextFormField(
+                      controller: _explicationNameController,
+                      enabled: !_submitting,
+                      decoration: const InputDecoration(
+                        labelText: 'Nom',
+                        hintText: 'Nom du dossier/explication',
+                        prefixIcon: Icon(Icons.title),
+                      ),
+                      validator: (String? value) {
+                        if (_kind != PostKind.explication) return null;
+                        final String v = (value ?? '').trim();
+                        if (v.isEmpty) {
+                          return 'Nom requis pour une explication.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 14),
                     TextFormField(
                       controller: _driveLinkController,
                       enabled: !_submitting,
                       decoration: const InputDecoration(
-                        labelText: 'Lien Google Drive direct',
-                        hintText: 'https://drive.google.com/uc?export=view&id=...',
+                        labelText: 'Lien du drive',
+                        hintText: 'https://drive.google.com/...',
                         prefixIcon: Icon(Icons.link),
                       ),
                       validator: (String? value) {
@@ -360,7 +467,8 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                         if (v.isEmpty) {
                           return 'Lien requis pour une explication.';
                         }
-                        if (!(v.startsWith('http://') || v.startsWith('https://'))) {
+                        if (!(v.startsWith('http://') ||
+                            v.startsWith('https://'))) {
                           return 'Lien invalide.';
                         }
                         return null;
@@ -371,7 +479,9 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                       onPressed: _submitting ? null : _pickImage,
                       icon: const Icon(Icons.image_outlined),
                       label: Text(
-                        _isEditing
+                        _kind == PostKind.reel
+                            ? 'Choisir une miniature'
+                            : _isEditing
                             ? 'Changer l’image (optionnel)'
                             : 'Choisir une image',
                       ),
@@ -387,7 +497,9 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                             child: Image.memory(
                               _bytes!,
                               fit: BoxFit.cover,
-                              semanticLabel: 'Aperçu du poster',
+                              semanticLabel: _kind == PostKind.reel
+                                  ? 'Aperçu de la miniature du Reel'
+                                  : 'Aperçu du poster',
                             ),
                           ),
                         ),
@@ -395,7 +507,11 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                         OutlinedButton.icon(
                           onPressed: _submitting ? null : _pickImage,
                           icon: const Icon(Icons.swap_horiz),
-                          label: const Text('Changer d’image'),
+                          label: Text(
+                            _kind == PostKind.reel
+                                ? 'Changer la miniature'
+                                : 'Changer d’image',
+                          ),
                         ),
                       ],
                     ),
@@ -439,10 +555,16 @@ class _AdminPostFormState extends ConsumerState<AdminPostForm> {
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.upload_outlined),
+                        : Icon(
+                            _kind == PostKind.explication
+                                ? Icons.add_link
+                                : Icons.upload_outlined,
+                          ),
                     label: Text(
                       _submitting
-                          ? (_isEditing ? 'Modification…' : 'Publication…')
+                          ? (_isEditing ? 'Modification…' : 'Ajout…')
+                          : _kind == PostKind.explication
+                          ? (_isEditing ? 'Enregistrer' : 'Ajouter')
                           : (_isEditing ? 'Enregistrer' : 'Publier'),
                     ),
                   ),
