@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/floating_nav.dart';
 import '../../core/logger.dart';
 import '../../core/ui.dart';
 import 'notifications_repository.dart';
@@ -54,17 +55,37 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: _buildBody(async, items),
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      extendBody: true,
+      bottomNavigationBar: const FloatingNav(currentIndex: 1),
+      appBar: AppBar(
+        title: const Text('Notifications'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          tooltip: 'Retour',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
+        ),
+      ),
+      body: SerenityBackground(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: _buildBody(context, async, items),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildBody(
+    BuildContext context,
     AsyncValue<List<AppNotification>> async,
     List<AppNotification>? items,
   ) {
@@ -86,7 +107,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.fromLTRB(
+        0,
+        MediaQuery.paddingOf(context).top + kToolbarHeight + 8,
+        0,
+        80, // Espace suffisant en bas pour ne pas être masqué par la FloatingNav
+      ),
       itemCount: items.length,
       separatorBuilder: (BuildContext context, int index) =>
           const Divider(height: 1),
@@ -94,8 +120,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         final AppNotification item = items[index];
         return ListTile(
           leading: const CircleAvatar(
-            backgroundColor: Color(0xFF1A1A1A),
-            child: Icon(Icons.notifications_none, size: 20),
+            backgroundColor: kWarmMist,
+            child: Icon(Icons.notifications_none, size: 20, color: kDeepTeal),
           ),
           title: Text(
             item.title,
@@ -107,11 +133,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   item.body!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white60, fontSize: 13),
+                  style: const TextStyle(color: Colors.black54, fontSize: 13),
                 ),
           trailing: Text(
             timeAgo(item.createdAt),
-            style: const TextStyle(color: Colors.white38, fontSize: 11),
+            style: const TextStyle(color: Colors.black38, fontSize: 11),
           ),
           onTap: () => context.push('/post/${item.postId}'),
         );

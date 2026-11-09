@@ -5,103 +5,113 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/format.dart';
 import '../../core/ui.dart';
-import '../posts/posts_repository.dart';
+import 'likes_repository.dart';
+import 'posts_repository.dart';
 
-const List<_ReactionOption> _reactionOptions = <_ReactionOption>[
-  _ReactionOption(emoji: '😍', label: 'Love'),
-  _ReactionOption(emoji: '🔥', label: 'Fire'),
-  _ReactionOption(emoji: '👏', label: 'Bravo'),
-  _ReactionOption(emoji: '😮', label: 'Wow'),
-  _ReactionOption(emoji: '💬', label: 'Commentaire'),
-];
+/// "J'aime" style Instagram (cœur uniquement), persisté en base.
+class _ReactionBar extends ConsumerStatefulWidget {
+  const _ReactionBar({required this.postId, required this.likesCount});
 
-class _ReactionOption {
-  const _ReactionOption({required this.emoji, required this.label});
-
-  final String emoji;
-  final String label;
-}
-
-class _ReactionBar extends StatefulWidget {
-  const _ReactionBar({super.key});
+  final String postId;
+  final int likesCount;
 
   @override
-  State<_ReactionBar> createState() => _ReactionBarState();
+  ConsumerState<_ReactionBar> createState() => _ReactionBarState();
 }
 
-class _ReactionBarState extends State<_ReactionBar> {
-  final Map<String, int> _counts = <String, int>{
-    '😍': 0,
-    '🔥': 0,
-    '👏': 0,
-    '😮': 0,
-    '💬': 0,
-  };
-  final Set<String> _selected = <String>{};
+class _ReactionBarState extends ConsumerState<_ReactionBar> {
+  int? _countOverride;
+  bool _busy = false;
 
-  void _toggle(String emoji) {
+  @override
+  void initState() {
+    super.initState();
+    Future<void>(() => ensureLikesChecked(ref, <String>[widget.postId]));
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReactionBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_countOverride != null && widget.likesCount == _countOverride) {
+      _countOverride = null;
+    }
+  }
+
+  Future<void> _toggle() async {
+    if (_busy) return;
+    _busy = true;
+
+    final Set<String> current = ref.read(likedPostIdsProvider);
+    final bool wasLiked = current.contains(widget.postId);
+    final Set<String> optimistic = <String>{...current};
+    if (wasLiked) {
+      optimistic.remove(widget.postId);
+    } else {
+      optimistic.add(widget.postId);
+    }
+    ref.read(likedPostIdsProvider.notifier).state = optimistic;
     setState(() {
-      final bool isSelected = _selected.contains(emoji);
-      if (isSelected) {
-        _selected.remove(emoji);
-        _counts[emoji] = (_counts[emoji] ?? 0) - 1;
-      } else {
-        _selected.add(emoji);
-        _counts[emoji] = (_counts[emoji] ?? 0) + 1;
-      }
-      if ((_counts[emoji] ?? 0) < 0) {
-        _counts[emoji] = 0;
-      }
+      final int base = _countOverride ?? widget.likesCount;
+      _countOverride = wasLiked ? (base - 1) : (base + 1);
+      if (_countOverride! < 0) _countOverride = 0;
     });
+
+    try {
+      final LikeToggleResult result = await ref
+          .read(likesRepositoryProvider)
+          .toggleLike(widget.postId);
+      if (!mounted) return;
+      final Set<String> next = <String>{...ref.read(likedPostIdsProvider)};
+      if (result.liked) {
+        next.add(widget.postId);
+      } else {
+        next.remove(widget.postId);
+      }
+      ref.read(likedPostIdsProvider.notifier).state = next;
+      setState(() => _countOverride = result.likesCount);
+    } catch (_) {
+      if (!mounted) return;
+      ref.read(likedPostIdsProvider.notifier).state = current;
+      setState(() => _countOverride = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'enregistrer le J\'aime.')),
+      );
+    } finally {
+      _busy = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.35),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: _reactionOptions
-            .map((_ReactionOption option) {
-              final bool selected = _selected.contains(option.emoji);
-              final int count = _counts[option.emoji] ?? 0;
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _toggle(option.emoji),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 3,
-                  ),
-                  decoration: selected
-                      ? BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        )
-                      : null,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(option.emoji, style: const TextStyle(fontSize: 18)),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$count',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            })
-            .toList(growable: false),
-      ),
+    const Color likedColor = Color(0xFFED4956);
+    final bool liked = ref.watch(likedPostIdsProvider).contains(widget.postId);
+    final int count = _countOverride ?? widget.likesCount;
+    final IconData icon = liked ? Icons.favorite : Icons.favorite_border;
+    final Color iconColor = liked ? likedColor : kNavy;
+
+    return Row(
+      children: <Widget>[
+        IconButton(
+          onPressed: _toggle,
+          icon: Icon(icon, color: iconColor),
+          iconSize: 28,
+          tooltip: 'J\'aime',
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+        if (count > 0) ...<Widget>[
+          const SizedBox(width: 6),
+          Text(
+            '$count J\'aime${count > 1 ? 's' : ''}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: kNavy,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -127,11 +137,15 @@ class PostDetailScreen extends ConsumerWidget {
     }
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(title: Text(post?.platform.label ?? 'Poster')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: _buildBody(context, ref, async, items, post),
+      body: SerenityBackground(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: _buildBody(context, ref, async, items, post),
+          ),
         ),
       ),
     );
@@ -162,6 +176,9 @@ class PostDetailScreen extends ConsumerWidget {
     }
 
     return ListView(
+      padding: EdgeInsets.only(
+        top: MediaQuery.paddingOf(context).top + kToolbarHeight,
+      ),
       children: <Widget>[
         AspectRatio(
           aspectRatio: 1,
@@ -171,14 +188,14 @@ class PostDetailScreen extends ConsumerWidget {
               imageUrl: posterPublicUrl(post.mediaPath),
               fit: BoxFit.cover,
               placeholder: (BuildContext context, String url) =>
-                  const ColoredBox(color: Color(0xFF121212)),
+                  const ColoredBox(color: kWarmMist),
               errorWidget: (BuildContext context, String url, Object error) =>
                   const ColoredBox(
-                    color: Color(0xFF121212),
+                    color: kWarmMist,
                     child: Center(
                       child: Icon(
                         Icons.broken_image_outlined,
-                        color: Colors.white38,
+                        color: Colors.black26,
                         size: 44,
                       ),
                     ),
@@ -245,11 +262,11 @@ class PostDetailScreen extends ConsumerWidget {
                 ),
               ],
               const SizedBox(height: 16),
-              const _ReactionBar(),
+              _ReactionBar(postId: post.id, likesCount: post.likesCount),
               const SizedBox(height: 16),
               Text(
                 'Publié le ${formatDateTime(post.createdAt)}',
-                style: const TextStyle(color: Colors.white38, fontSize: 12),
+                style: const TextStyle(color: Colors.black38, fontSize: 12),
               ),
             ],
           ),

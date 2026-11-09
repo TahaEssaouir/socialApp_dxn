@@ -7,6 +7,7 @@ import "package:social_profile_app_dxn/features/notifications/notifications_repo
 import "package:social_profile_app_dxn/features/posts/posts_repository.dart";
 import "package:social_profile_app_dxn/features/profile/profile_repository.dart";
 import "package:social_profile_app_dxn/features/profile/profile_screen.dart";
+import "package:social_profile_app_dxn/core/ui.dart";
 
 void main() {
   final BrandProfile brand = BrandProfile(
@@ -63,7 +64,7 @@ void main() {
     expect(find.text("Publications"), findsOneWidget);
     expect(find.text("Reels"), findsOneWidget);
     expect(find.text("Aucun post pour le moment."), findsOneWidget);
-    expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+    expect(find.byIcon(Icons.more_vert), findsOneWidget);
     expect(find.byIcon(Icons.add_box_outlined), findsNothing);
   });
 
@@ -76,13 +77,28 @@ void main() {
     expect(find.text("Aucun reel pour le moment."), findsOneWidget);
   });
 
+  testWidgets("equilibre les distances autour du nom du profil", (
+    WidgetTester tester,
+  ) async {
+    await pumpProfile(tester, isAdmin: false);
+
+    final Rect avatar = tester.getRect(find.byType(BrandAvatar));
+    final Rect displayName = tester.getRect(find.text("Nxt Taha"));
+    final Rect followers = tester.getRect(find.text("12,4 k"));
+
+    expect(
+      displayName.top - avatar.bottom,
+      closeTo(followers.top - displayName.bottom, 0.1),
+    );
+  });
+
   testWidgets("affiche l’action admin pour un administrateur", (
     WidgetTester tester,
   ) async {
     await pumpProfile(tester, isAdmin: true);
 
     expect(find.byIcon(Icons.add_box_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.lock_outline), findsNothing);
+    expect(find.byIcon(Icons.more_vert), findsNothing);
   });
 
   testWidgets(
@@ -102,6 +118,12 @@ void main() {
         ],
       );
 
+      await tester.scrollUntilVisible(
+        find.byIcon(Icons.more_vert),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.more_vert));
       await tester.pumpAndSettle();
 

@@ -258,6 +258,23 @@ async function updatePlatform(
   fetchFn: () => Promise<number>
 ) {
   const now = new Date().toISOString();
+
+  // Une plateforme en saisie manuelle n'est jamais écrasée par l'API.
+  try {
+    const { data, error } = await supabase
+      .from('social_stats')
+      .select('source')
+      .eq('platform', platform)
+      .maybeSingle();
+    if (error) throw error;
+    if (data?.source === 'manual') {
+      console.log(JSON.stringify({ event: 'stats_skipped_manual', platform }));
+      return { platform, ok: true, skipped: true };
+    }
+  } catch (checkError) {
+    console.error(JSON.stringify({ event: 'stats_source_check_failed', platform, error: truncateError(checkError) }));
+  }
+
   try {
     const count = await fetchFn();
     const { error } = await supabase

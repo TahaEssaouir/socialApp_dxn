@@ -44,11 +44,7 @@ class AppLogger {
   }
 
   void error(String message, Object? error, [StackTrace? stackTrace]) {
-    _write(
-      LogLevel.error,
-      message,
-      <Object?>[?error, ?stackTrace],
-    );
+    _write(LogLevel.error, message, <Object?>[?error, ?stackTrace]);
   }
 
   void _write(LogLevel level, String message, Object? data) {

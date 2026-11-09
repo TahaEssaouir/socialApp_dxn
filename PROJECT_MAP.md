@@ -391,6 +391,7 @@ de poster, recherche, filtres plateforme, édition de profil.
 | Notifications | **In-app** : badge + centre via Realtime. Pas de FCM en V1. |
 | Médias | **Images uniquement** (JPEG/PNG/WebP ≤ 10 Mo). |
 | Architecture | **Flutter + Supabase**, FastAPI archivé, mono-profil. |
+| Profil | L'en-tête équilibre l'espace entre l'avatar, le nom affiché et les statistiques sociales. |
 | Approbation | **M0 approuvé et démarré**. |
 
 ## Bloquants restants (M4 uniquement)

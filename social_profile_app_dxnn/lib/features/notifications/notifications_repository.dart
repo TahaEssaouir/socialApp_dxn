@@ -74,7 +74,8 @@ final Provider<NotificationsRepository> notificationsRepositoryProvider =
 
 final StreamProvider<List<AppNotification>> notificationsProvider =
     StreamProvider<List<AppNotification>>(
-      (Ref ref) => ref.watch(notificationsRepositoryProvider).watchNotifications(),
+      (Ref ref) =>
+          ref.watch(notificationsRepositoryProvider).watchNotifications(),
     );
 
 final FutureProvider<DateTime?> lastSeenProvider = FutureProvider<DateTime?>(

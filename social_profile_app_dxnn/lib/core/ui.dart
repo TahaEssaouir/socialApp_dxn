@@ -1,16 +1,45 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-const Color _surface = Color(0xFF121212);
-const Color _border = Color(0xFF262626);
+/// Palette « Deep Teal / Serenity ».
+const Color kDeepTeal = Color(0xFF005F60);
+const Color kMintTeal = Color(0xFF4DB6AC);
+const Color kNavy = Color(0xFF1A237E);
+const Color kWarmMist = Color(0xFFE0F2F1);
+
+const Color _surface = Color(0xFFE0F2F1);
+const Color _border = Color(0xFFB7D9D4);
+
+/// Fond dégradé bleu-vert inspiré de l'exemple.
+class SerenityBackground extends StatelessWidget {
+  const SerenityBackground({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Color(0xFFE0F2F1),
+            Color(0xFFD5EEF0),
+            Color(0xFFBFE4E1),
+            Color(0xFFA8D9D1),
+          ],
+          stops: <double>[0, 0.35, 0.7, 1],
+        ),
+      ),
+      child: child,
+    );
+  }
+}
 
 /// Centre le contenu sur grand écran sans contraindre les petits écrans.
 class ResponsiveCenter extends StatelessWidget {
-  const ResponsiveCenter({
-    super.key,
-    required this.child,
-    this.maxWidth = 935,
-  });
+  const ResponsiveCenter({super.key, required this.child, this.maxWidth = 935});
 
   final Widget child;
   final double maxWidth;
@@ -42,7 +71,7 @@ class LoadingPane extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               label!,
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
+              style: const TextStyle(color: Colors.black54, fontSize: 13),
             ),
           ],
         ],
@@ -52,11 +81,7 @@ class LoadingPane extends StatelessWidget {
 }
 
 class EmptyPane extends StatelessWidget {
-  const EmptyPane({
-    super.key,
-    required this.icon,
-    required this.message,
-  });
+  const EmptyPane({super.key, required this.icon, required this.message});
 
   final IconData icon;
   final String message;
@@ -69,12 +94,12 @@ class EmptyPane extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: 44, color: Colors.white38),
+            Icon(icon, size: 44, color: Colors.black26),
             const SizedBox(height: 12),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: const TextStyle(color: Colors.black54, fontSize: 14),
             ),
           ],
         ),
@@ -84,11 +109,7 @@ class EmptyPane extends StatelessWidget {
 }
 
 class ErrorPane extends StatelessWidget {
-  const ErrorPane({
-    super.key,
-    required this.message,
-    this.onRetry,
-  });
+  const ErrorPane({super.key, required this.message, this.onRetry});
 
   final String message;
   final VoidCallback? onRetry;
@@ -101,12 +122,16 @@ class ErrorPane extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Icon(Icons.cloud_off_outlined, size: 44, color: Colors.white38),
+            const Icon(
+              Icons.cloud_off_outlined,
+              size: 44,
+              color: Colors.black26,
+            ),
             const SizedBox(height: 12),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: const TextStyle(color: Colors.black54, fontSize: 14),
             ),
             if (onRetry != null) ...<Widget>[
               const SizedBox(height: 16),
@@ -125,11 +150,7 @@ class ErrorPane extends StatelessWidget {
 
 /// Avatar circulaire avec dégradé Instagram quand aucune image n'est fournie.
 class BrandAvatar extends StatelessWidget {
-  const BrandAvatar({
-    super.key,
-    required this.url,
-    this.size = 88,
-  });
+  const BrandAvatar({super.key, required this.url, this.size = 88});
 
   final String? url;
   final double size;
@@ -156,11 +177,8 @@ class BrandAvatar extends StatelessWidget {
                 fit: BoxFit.cover,
                 placeholder: (BuildContext context, String _) =>
                     const ColoredBox(color: _surface),
-                errorWidget: (
-                  BuildContext context,
-                  String _,
-                  Object error,
-                ) => const _GradientAvatar(),
+                errorWidget: (BuildContext context, String _, Object error) =>
+                    const _GradientAvatar(),
               )
             : const _GradientAvatar(),
       ),
@@ -178,12 +196,10 @@ class _GradientAvatar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFF56040)],
+          colors: <Color>[kDeepTeal, kMintTeal],
         ),
       ),
-      child: Center(
-        child: Icon(Icons.person, color: Colors.white, size: 40),
-      ),
+      child: Center(child: Icon(Icons.person, color: Colors.white, size: 40)),
     );
   }
 }

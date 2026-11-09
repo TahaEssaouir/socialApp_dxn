@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,6 +85,7 @@ class SocialStat {
     this.lastSuccessAt,
     this.lastAttemptAt,
     this.lastError,
+    this.isManual = false,
   });
 
   final StatPlatform platform;
@@ -91,6 +93,7 @@ class SocialStat {
   final DateTime? lastSuccessAt;
   final DateTime? lastAttemptAt;
   final String? lastError;
+  final bool isManual;
 
   factory SocialStat.fromMap(Map<String, dynamic> map) {
     return SocialStat(
@@ -99,6 +102,7 @@ class SocialStat {
       lastSuccessAt: _parseDate(map['last_success_at']),
       lastAttemptAt: _parseDate(map['last_attempt_at']),
       lastError: map['last_error'] as String?,
+      isManual: map['source'] == 'manual',
     );
   }
 
@@ -120,6 +124,107 @@ class SocialStat {
 
 class ProfileRepository {
   static const String _statsCacheKey = 'social_stats_cache_v1';
+
+  static const Set<String> _avatarExtensions = <String>{
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+  };
+
+  /// Remplace la photo de profil : upload dans le bucket « avatars »
+  /// puis enregistre l'URL publique dans brand_profile.avatar_url.
+  Future<void> updateAvatar({
+    required Uint8List bytes,
+    required String extension,
+  }) async {
+    final String normalized = extension.trim().toLowerCase();
+    if (!_avatarExtensions.contains(normalized)) {
+      throw const ProfileUnavailableException(
+        'Format de photo non supporté (JPG, PNG ou WebP attendu).',
+      );
+    }
+
+    final String contentType = switch (normalized) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      _ => 'image/webp',
+    };
+    final String path =
+        'avatar_${DateTime.now().toUtc().microsecondsSinceEpoch}'
+        '.$normalized';
+    final StorageFileApi storage = supabase.storage.from('avatars');
+
+    try {
+      await storage.uploadBinary(
+        path,
+        bytes,
+        fileOptions: FileOptions(
+          contentType: contentType,
+          cacheControl: '3600',
+          upsert: false,
+        ),
+      );
+    } catch (error, stack) {
+      log.error('Upload de la photo de profil impossible', error, stack);
+      rethrow;
+    }
+
+    final String publicUrl = storage.getPublicUrl(path);
+    if (publicUrl.isEmpty) {
+      throw const ProfileUnavailableException('URL de la photo indisponible.');
+    }
+
+    try {
+      await supabase
+          .from('brand_profile')
+          .update(<String, dynamic>{'avatar_url': publicUrl})
+          .eq('id', 1);
+    } catch (error, stack) {
+      log.error('Mise à jour de la photo de profil impossible', error, stack);
+      rethrow;
+    }
+  }
+
+  /// Retire la photo de profil de brand_profile (l'objet Storage
+  /// historique reste en place, les autres versions restent consultables).
+  Future<void> removeAvatar() async {
+    try {
+      await supabase
+          .from('brand_profile')
+          .update(<String, dynamic>{'avatar_url': null})
+          .eq('id', 1);
+    } catch (error, stack) {
+      log.error('Suppression de la photo de profil impossible', error, stack);
+      rethrow;
+    }
+  }
+
+  /// Définit manuellement le nombre de followers d'une plateforme
+  /// (réservé à l'admin, RLS social_stats_admin_update).
+  Future<void> setFollowers(StatPlatform platform, int count) async {
+    final int clamped = count < 0 ? 0 : count;
+    final String now = DateTime.now().toUtc().toIso8601String();
+    try {
+      await supabase
+          .from('social_stats')
+          .update(<String, dynamic>{
+            'followers_count': clamped,
+            'source': 'manual',
+            'last_success_at': now,
+            'last_attempt_at': now,
+            'last_error': null,
+          })
+          .eq('platform', platform.name);
+    } catch (error, stack) {
+      log.error(
+        'Mise à jour manuelle des followers impossible (${platform.name})',
+        error,
+        stack,
+      );
+      rethrow;
+    }
+  }
 
   Future<BrandProfile> fetchBrand() async {
     try {

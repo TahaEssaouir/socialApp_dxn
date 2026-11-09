@@ -67,6 +67,7 @@ class PostItem {
     this.facebookLink,
     this.instagramLink,
     this.externalLink,
+    this.likesCount = 0,
   });
 
   final String id;
@@ -78,8 +79,15 @@ class PostItem {
   final String? facebookLink;
   final String? instagramLink;
   final String? externalLink;
+  final int likesCount;
 
   factory PostItem.fromMap(Map<String, dynamic> map) {
+    final Object? rawLikes = map['likes_count'];
+    final int likesCount = switch (rawLikes) {
+      final int value => value,
+      final num value => value.toInt(),
+      _ => 0,
+    };
     return PostItem(
       id: map['id'] as String,
       platform: PostPlatform.values.byName(map['platform'] as String),
@@ -90,6 +98,7 @@ class PostItem {
       facebookLink: map['facebook_link'] as String?,
       instagramLink: map['instagram_link'] as String?,
       externalLink: map['external_link'] as String?,
+      likesCount: likesCount < 0 ? 0 : likesCount,
     );
   }
 }
