@@ -152,35 +152,54 @@ class _MapBody extends ConsumerWidget {
       markers.add(
         Marker(
           point: coords,
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 54,
+          alignment: Alignment.topCenter,
           child: GestureDetector(
             onTap: () => _showCityCenters(context, ref, entry.key, entry.value),
             child: Tooltip(
               message: '${entry.key} (${entry.value.length})',
-              child: Container(
-                decoration: BoxDecoration(
-                  color: kDeepTeal,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: const <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 6,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    '${entry.value.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+              child: Stack(
+                alignment: Alignment.topCenter,
+                children: <Widget>[
+                  const Icon(
+                    Icons.location_on,
+                    size: 48,
+                    color: kDeepTeal,
+                    shadows: <Shadow>[
+                      Shadow(
+                        color: Colors.black38,
+                        blurRadius: 6,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    top: 8,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${entry.value.length}',
+                          style: const TextStyle(
+                            color: kDeepTeal,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            height: 1,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -333,7 +352,7 @@ class _CenterTile extends ConsumerWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: const <BoxShadow>[
           BoxShadow(
-            color: Color(0x08000000),
+            color: Color(0x0A000000),
             blurRadius: 8,
             offset: Offset(0, 2),
           ),
