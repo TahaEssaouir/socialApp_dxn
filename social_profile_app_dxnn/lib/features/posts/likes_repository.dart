@@ -66,6 +66,17 @@ final Provider<LikesRepository> likesRepositoryProvider =
 class LikedPostIdsNotifier extends Notifier<Set<String>> {
   @override
   Set<String> build() => <String>{};
+
+  /// Remplace l'ensemble (optimisme, confirmation serveur, retour arrière).
+  void replace(Set<String> ids) {
+    state = Set<String>.of(ids);
+  }
+
+  /// Fusionne des ids confirmés aimés par le serveur.
+  void addAll(Set<String> ids) {
+    if (ids.isEmpty) return;
+    state = Set<String>.of(<String>{...state, ...ids});
+  }
 }
 
 final NotifierProvider<LikedPostIdsNotifier, Set<String>> likedPostIdsProvider =
@@ -77,6 +88,12 @@ final NotifierProvider<LikedPostIdsNotifier, Set<String>> likedPostIdsProvider =
 class CheckedLikeIdsNotifier extends Notifier<Set<String>> {
   @override
   Set<String> build() => <String>{};
+
+  /// Marque ces ids comme vérifiés (évite les rechargements en boucle).
+  void markChecked(Iterable<String> ids) {
+    if (ids.isEmpty) return;
+    state = Set<String>.of(<String>{...state, ...ids});
+  }
 }
 
 final NotifierProvider<CheckedLikeIdsNotifier, Set<String>>
@@ -103,16 +120,8 @@ Future<void> ensureLikesChecked(WidgetRef ref, List<String> postIds) async {
         .read(likesRepositoryProvider)
         .fetchLikedIds(pending);
     try {
-      if (liked.isNotEmpty) {
-        ref.read(likedPostIdsProvider.notifier).state = <String>{
-          ...ref.read(likedPostIdsProvider),
-          ...liked,
-        };
-      }
-      ref.read(checkedLikeIdsProvider.notifier).state = <String>{
-        ...ref.read(checkedLikeIdsProvider),
-        ...pending,
-      };
+      ref.read(likedPostIdsProvider.notifier).addAll(liked);
+      ref.read(checkedLikeIdsProvider.notifier).markChecked(pending);
     } catch (_) {
       // Provider indisponible (widget démonté) : on retentera.
     }

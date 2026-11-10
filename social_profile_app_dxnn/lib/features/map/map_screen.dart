@@ -29,7 +29,7 @@ class MapScreen extends ConsumerWidget {
       extendBody: true,
       bottomNavigationBar: const FloatingNav(currentIndex: 2),
       appBar: AppBar(
-        title: const Text('Carte des centres DXN Maroc'),
+        title: const Text('Carte du Maroc'),
         actions: <Widget>[
           if (isAdmin)
             IconButton(
@@ -43,7 +43,7 @@ class MapScreen extends ConsumerWidget {
         child: centersAsync.when(
           loading: () => const LoadingPane(label: 'Chargement de la carte…'),
           error: (Object error, _) => ErrorPane(
-            message: 'Impossible de charger les centres de services.',
+            message: 'Impossible de charger la carte.',
             onRetry: () => ref.invalidate(serviceCentersProvider),
           ),
           data: (List<ServiceCenter> centers) =>
@@ -63,7 +63,7 @@ class _MapBody extends ConsumerWidget {
   void _showCityCenters(
     BuildContext context,
     WidgetRef ref,
-    String city,
+    String cityName,
     List<ServiceCenter> cityCenters,
   ) {
     showModalBottomSheet<void>(
@@ -87,14 +87,17 @@ class _MapBody extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
+                    ),
                     child: Row(
                       children: <Widget>[
                         const Icon(Icons.location_on, color: kDeepTeal),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Centres de services — $city',
+                            'Centres de services — $cityName',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
@@ -106,30 +109,61 @@ class _MapBody extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      itemCount: cityCenters.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 14),
-                      itemBuilder: (BuildContext _, int index) {
-                        final ServiceCenter center = cityCenters[index];
-                        return _CenterTile(
-                          center: center,
-                          isAdmin: isAdmin,
-                          onEdit: isAdmin
-                              ? () {
-                                  Navigator.pop(sheetContext);
-                                  context.push(
-                                    '/admin/center/edit',
-                                    extra: center,
-                                  );
-                                }
-                              : null,
-                        );
-                      },
+                  if (cityCenters.isEmpty) ...<Widget>[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      child: const Text(
+                        'Aucun centre de services dans cette ville pour le moment.',
+                        style: TextStyle(color: Colors.black54),
+                      ),
                     ),
-                  ),
+                    if (isAdmin)
+                      FilledButton.tonalIcon(
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          context.push(
+                            Uri(
+                              path: '/admin/center/new',
+                              queryParameters: <String, String>{
+                                'city': cityName,
+                              },
+                            ).toString(),
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.add_location_alt_outlined,
+                          size: 18,
+                        ),
+                        label: Text('Ajouter un centre à $cityName'),
+                      ),
+                  ] else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        itemCount: cityCenters.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 14),
+                        itemBuilder: (BuildContext _, int index) {
+                          final ServiceCenter center = cityCenters[index];
+                          return _CenterTile(
+                            center: center,
+                            isAdmin: isAdmin,
+                            onEdit: isAdmin
+                                ? () {
+                                    Navigator.pop(sheetContext);
+                                    context.push(
+                                      '/admin/center/edit',
+                                      extra: center,
+                                    );
+                                  }
+                                : null,
+                          );
+                        },
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -141,79 +175,37 @@ class _MapBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final Map<String, List<ServiceCenter>> byCity = groupCentersByCity(centers);
-    final List<MapEntry<String, List<ServiceCenter>>> entries = byCity.entries
-        .toList();
+    final Map<String, List<ServiceCenter>> byCityKey = groupCentersByCity(
+      centers,
+    );
 
+    // Un marqueur par ville du Maroc, avec badge si la ville a des centres.
     final List<Marker> markers = <Marker>[];
-    for (final MapEntry<String, List<ServiceCenter>> entry in entries) {
-      final LatLng? coords = coordsForCity(entry.key);
-      if (coords == null) continue;
+    for (final MoroccoCity city in kMoroccoCities) {
+      final List<ServiceCenter> cityCenters =
+          byCityKey[normalizeCityKey(city.name)] ?? const <ServiceCenter>[];
       markers.add(
         Marker(
-          point: coords,
+          point: city.position,
           width: 48,
           height: 54,
           alignment: Alignment.topCenter,
           child: GestureDetector(
-            onTap: () => _showCityCenters(context, ref, entry.key, entry.value),
-            child: Tooltip(
-              message: '${entry.key} (${entry.value.length})',
-              child: Stack(
-                alignment: Alignment.topCenter,
-                children: <Widget>[
-                  const Icon(
-                    Icons.location_on,
-                    size: 48,
-                    color: kDeepTeal,
-                    shadows: <Shadow>[
-                      Shadow(
-                        color: Colors.black38,
-                        blurRadius: 6,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  Positioned(
-                    top: 8,
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          '${entry.value.length}',
-                          style: const TextStyle(
-                            color: kDeepTeal,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
-                            height: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            onTap: () => _showCityCenters(context, ref, city.name, cityCenters),
+            child: _CityPin(cityName: city.name, count: cityCenters.length),
           ),
         ),
       );
     }
 
-    final List<String> unmappedCities = entries
-        .where(
-          (MapEntry<String, List<ServiceCenter>> e) =>
-              coordsForCity(e.key) == null,
-        )
-        .map((MapEntry<String, List<ServiceCenter>> e) => e.key)
-        .toList();
+    // Villes saisies avant la liste officielle (repli, sans coordonnées).
+    final List<MapEntry<String, List<ServiceCenter>>> unmappedEntries =
+        byCityKey.entries
+            .where(
+              (MapEntry<String, List<ServiceCenter>> entry) =>
+                  moroccoCityByName(entry.value.first.city) == null,
+            )
+            .toList(growable: false);
 
     return Column(
       children: <Widget>[
@@ -246,22 +238,27 @@ class _MapBody extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  if (centers.isEmpty)
-                    Positioned.fill(
+                  if (unmappedEntries.isNotEmpty)
+                    Positioned(
+                      left: 8,
+                      right: 8,
+                      bottom: 8,
                       child: IgnorePointer(
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.92),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'Aucun centre de services pour le moment.',
-                              style: TextStyle(color: kNavy),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'Villes non localisées : '
+                            '${unmappedEntries.map((MapEntry<String, List<ServiceCenter>> e) => e.value.first.city).join(', ')}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.black54,
                             ),
                           ),
                         ),
@@ -272,38 +269,92 @@ class _MapBody extends ConsumerWidget {
             ),
           ),
         ),
-        if (entries.isNotEmpty)
+        if (unmappedEntries.isNotEmpty)
           SizedBox(
             height: 54,
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
               scrollDirection: Axis.horizontal,
-              itemCount: entries.length,
+              itemCount: unmappedEntries.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (BuildContext _, int index) {
                 final MapEntry<String, List<ServiceCenter>> entry =
-                    entries[index];
+                    unmappedEntries[index];
                 return ActionChip(
                   avatar: const Icon(Icons.place, size: 16, color: kDeepTeal),
-                  label: Text('${entry.key} (${entry.value.length})'),
-                  onPressed: () =>
-                      _showCityCenters(context, ref, entry.key, entry.value),
+                  label: Text(
+                    '${entry.value.first.city} (${entry.value.length})',
+                  ),
+                  onPressed: () => _showCityCenters(
+                    context,
+                    ref,
+                    entry.value.first.city,
+                    entry.value,
+                  ),
                 );
               },
             ),
           ),
-        if (unmappedCities.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Text(
-              'Position approximative non disponible pour : '
-              '${unmappedCities.join(', ')} (appuyez sur la ville pour voir les centres).',
-              style: const TextStyle(fontSize: 11, color: Colors.black54),
-              textAlign: TextAlign.center,
-            ),
-          ),
         const SizedBox(height: 72),
       ],
+    );
+  }
+}
+
+class _CityPin extends StatelessWidget {
+  const _CityPin({required this.cityName, required this.count});
+
+  final String cityName;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasCenters = count > 0;
+    return Tooltip(
+      message: hasCenters ? '$cityName ($count)' : cityName,
+      child: Stack(
+        alignment: Alignment.topCenter,
+        children: <Widget>[
+          Icon(
+            Icons.location_on,
+            size: hasCenters ? 46 : 34,
+            color: hasCenters ? kDeepTeal : kMintTeal,
+            shadows: const <Shadow>[
+              Shadow(
+                color: Colors.black38,
+                blurRadius: 6,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          if (hasCenters)
+            Positioned(
+              top: 7,
+              child: Container(
+                width: 20,
+                height: 20,
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      color: kDeepTeal,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -415,8 +466,7 @@ class _CenterTile extends ConsumerWidget {
                             child: const Text('Annuler'),
                           ),
                           FilledButton(
-                            onPressed: () =>
-                                Navigator.pop(dialogContext, true),
+                            onPressed: () => Navigator.pop(dialogContext, true),
                             child: const Text('Supprimer'),
                           ),
                         ],
@@ -472,21 +522,23 @@ class _CenterTile extends ConsumerWidget {
                 ),
               ),
             ),
-          if ((center.phone ?? '').isNotEmpty)
+          for (final String phone in center.phones)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: InkWell(
-                onTap: () => _launchUri(
-                  context,
-                  Uri(scheme: 'tel', path: center.phone!.trim()),
-                ),
+                onTap: () =>
+                    _launchUri(context, Uri(scheme: 'tel', path: phone.trim())),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    const Icon(Icons.phone_outlined, size: 14, color: kDeepTeal),
+                    const Icon(
+                      Icons.phone_outlined,
+                      size: 14,
+                      color: kDeepTeal,
+                    ),
                     const SizedBox(width: 4),
                     Text(
-                      center.phone!,
+                      phone,
                       style: const TextStyle(
                         color: kDeepTeal,
                         fontWeight: FontWeight.w600,
@@ -497,26 +549,27 @@ class _CenterTile extends ConsumerWidget {
                 ),
               ),
             ),
-          if ((center.email ?? '').isNotEmpty)
+          for (final String email in center.emails)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: InkWell(
                 onTap: () => _launchUri(
                   context,
-                  Uri(scheme: 'mailto', path: center.email!.trim()),
+                  Uri(scheme: 'mailto', path: email.trim()),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    const Icon(Icons.email_outlined, size: 14, color: kDeepTeal),
+                    const Icon(
+                      Icons.email_outlined,
+                      size: 14,
+                      color: kDeepTeal,
+                    ),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
-                        center.email!,
-                        style: const TextStyle(
-                          color: kDeepTeal,
-                          fontSize: 13,
-                        ),
+                        email,
+                        style: const TextStyle(color: kDeepTeal, fontSize: 13),
                       ),
                     ),
                   ],

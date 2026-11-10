@@ -485,9 +485,7 @@ class _ProfileHeader extends ConsumerWidget {
                         );
                       },
                       icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text(
-                        'Modifier les followers manuellement',
-                      ),
+                      label: const Text('Modifier les followers manuellement'),
                     ),
                   ],
                   if (platform.officialUrl != null) ...<Widget>[
@@ -965,7 +963,7 @@ class _ReactionBarState extends ConsumerState<_ReactionBar> {
     } else {
       optimistic.add(widget.postId);
     }
-    ref.read(likedPostIdsProvider.notifier).state = optimistic;
+    ref.read(likedPostIdsProvider.notifier).replace(optimistic);
     setState(() {
       final int base = _countOverride ?? widget.likesCount;
       _countOverride = wasLiked ? (base - 1) : (base + 1);
@@ -983,11 +981,11 @@ class _ReactionBarState extends ConsumerState<_ReactionBar> {
       } else {
         next.remove(widget.postId);
       }
-      ref.read(likedPostIdsProvider.notifier).state = next;
+      ref.read(likedPostIdsProvider.notifier).replace(next);
       setState(() => _countOverride = result.likesCount);
     } catch (_) {
       if (!mounted) return;
-      ref.read(likedPostIdsProvider.notifier).state = current;
+      ref.read(likedPostIdsProvider.notifier).replace(current);
       setState(() => _countOverride = null);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Impossible d\'enregistrer le J\'aime.')),
