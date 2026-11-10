@@ -65,11 +65,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
           }
           return null;
         },
-        builder: (BuildContext context, GoRouterState state) => AdminGuard(
-          child: AdminCenterForm(
-            initialCity: state.uri.queryParameters['city'],
-          ),
-        ),
+        builder: (BuildContext context, GoRouterState state) =>
+            const AdminGuard(child: AdminCenterForm()),
       ),
       GoRoute(
         path: '/admin/center/edit',

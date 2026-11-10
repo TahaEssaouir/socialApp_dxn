@@ -8,12 +8,9 @@ import '../auth/auth_repository.dart';
 import 'service_centers_repository.dart';
 
 class AdminCenterForm extends ConsumerStatefulWidget {
-  const AdminCenterForm({super.key, this.center, this.initialCity});
+  const AdminCenterForm({super.key, this.center});
 
   final ServiceCenter? center;
-
-  /// Ville présélectionnée (depuis la carte : « Ajouter un centre à … »).
-  final String? initialCity;
 
   @override
   ConsumerState<AdminCenterForm> createState() => _AdminCenterFormState();
@@ -21,14 +18,15 @@ class AdminCenterForm extends ConsumerStatefulWidget {
 
 class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
   late final TextEditingController _cityController;
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  final List<TextEditingController> _phoneControllers =
-      <TextEditingController>[];
-  final List<TextEditingController> _emailControllers =
-      <TextEditingController>[];
+  late final TextEditingController _nameController;
+  late final TextEditingController _addressController;
+  late final TextEditingController _locationController;
+
+  final List<TextEditingController> _phoneControllers = [];
+  final List<TextEditingController> _emailControllers = [];
+
   late CenterKind _kind;
   bool _saving = false;
 
@@ -37,28 +35,55 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
   @override
   void initState() {
     super.initState();
+
     final ServiceCenter? center = widget.center;
-    final String initialCity = (center?.city ?? widget.initialCity ?? '')
-        .trim();
-    _cityController = TextEditingController(text: initialCity);
-    _nameController.text = center?.name ?? '';
-    _addressController.text = center?.address ?? '';
-    _locationController.text = center?.location ?? '';
-    if (center != null) {
-      for (final String phone in center.phones) {
-        _phoneControllers.add(TextEditingController(text: phone));
-      }
-      for (final String email in center.emails) {
-        _emailControllers.add(TextEditingController(text: email));
-      }
-    }
-    if (_phoneControllers.isEmpty) {
-      _phoneControllers.add(TextEditingController());
-    }
-    if (_emailControllers.isEmpty) {
-      _emailControllers.add(TextEditingController());
-    }
+
+    _cityController = TextEditingController(text: center?.city ?? '');
+    _nameController = TextEditingController(text: center?.name ?? '');
+    _addressController = TextEditingController(text: center?.address ?? '');
+    _locationController = TextEditingController(text: center?.location ?? '');
+
+    _phoneControllers.addAll(_initialContacts(center?.phones ?? []));
+
+    _emailControllers.addAll(_initialContacts(center?.emails ?? []));
+
     _kind = center?.kind ?? CenterKind.center;
+  }
+
+  List<TextEditingController> _initialContacts(List<String> contacts) {
+    final values = contacts.isEmpty ? <String>[''] : contacts;
+
+    return values.map((value) => TextEditingController(text: value)).toList();
+  }
+
+  List<String> _contactList(List<TextEditingController> controllers) {
+    return controllers
+        .map((controller) => controller.text.trim())
+        .where((value) => value.isNotEmpty)
+        .toList();
+  }
+
+  void _addContact(List<TextEditingController> controllers) {
+    setState(() {
+      controllers.add(TextEditingController());
+    });
+  }
+
+  void _removeContact(List<TextEditingController> controllers, int index) {
+    if (controllers.length == 1) {
+      controllers.first.clear();
+      return;
+    }
+
+    final removed = controllers[index];
+
+    setState(() {
+      controllers.removeAt(index);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      removed.dispose();
+    });
   }
 
   @override
@@ -67,56 +92,112 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
     _nameController.dispose();
     _addressController.dispose();
     _locationController.dispose();
-    for (final TextEditingController controller in _phoneControllers) {
+
+    for (final controller in _phoneControllers) {
       controller.dispose();
     }
-    for (final TextEditingController controller in _emailControllers) {
+
+    for (final controller in _emailControllers) {
       controller.dispose();
     }
+
     super.dispose();
   }
 
-  void _addPhoneField() {
-    setState(() => _phoneControllers.add(TextEditingController()));
+  String? _required(String? value, String label) {
+    if ((value ?? '').trim().isEmpty) {
+      return '$label requis.';
+    }
+    return null;
   }
 
-  void _addEmailField() {
-    setState(() => _emailControllers.add(TextEditingController()));
+  String? _validateEmail(String? value) {
+    final email = (value ?? '').trim();
+
+    if (email.isEmpty) return null;
+
+    final regex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
+    if (!regex.hasMatch(email)) {
+      return 'Adresse e-mail invalide.';
+    }
+
+    return null;
   }
 
-  void _removePhoneField(int index) {
-    setState(() {
-      final TextEditingController controller = _phoneControllers.removeAt(
-        index,
-      );
-      controller.dispose();
-    });
-  }
+  Widget _contactFields({
+    required String label,
+    required IconData icon,
+    required TextInputType keyboard,
+    required List<TextEditingController> controllers,
+    required String addLabel,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < controllers.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
 
-  void _removeEmailField(int index) {
-    setState(() {
-      final TextEditingController controller = _emailControllers.removeAt(
-        index,
-      );
-      controller.dispose();
-    });
-  }
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  key: ObjectKey(controllers[i]),
+                  controller: controllers[i],
+                  keyboardType: keyboard,
+                  decoration: InputDecoration(
+                    labelText: '$label ${i + 1}',
+                    prefixIcon: Icon(icon),
+                  ),
+                  validator: validator,
+                ),
+              ),
 
-  List<String> _values(List<TextEditingController> controllers) => controllers
-      .map((TextEditingController controller) => controller.text.trim())
-      .where((String value) => value.isNotEmpty)
-      .toList(growable: false);
+              const SizedBox(width: 4),
+
+              IconButton(
+                tooltip: 'Supprimer $label ${i + 1}',
+                onPressed: _saving
+                    ? null
+                    : () => _removeContact(controllers, i),
+                icon: const Icon(
+                  Icons.remove_circle_outline,
+                  color: Colors.redAccent,
+                ),
+              ),
+            ],
+          ),
+        ],
+
+        const SizedBox(height: 4),
+
+        TextButton.icon(
+          onPressed: _saving ? null : () => _addContact(controllers),
+          icon: const Icon(Icons.add_circle_outline),
+          label: Text(addLabel),
+        ),
+      ],
+    );
+  }
 
   Future<void> _save() async {
     if (_saving) return;
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
 
     setState(() => _saving = true);
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
-      final ServiceCentersRepository repository = ref.read(
-        serviceCentersRepositoryProvider,
-      );
+      final repository = ref.read(serviceCentersRepositoryProvider);
+
+      final phones = _contactList(_phoneControllers);
+      final emails = _contactList(_emailControllers);
+
       if (_isEditing) {
         await repository.updateCenter(
           id: widget.center!.id,
@@ -124,8 +205,8 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
           name: _nameController.text,
           kind: _kind,
           address: _addressController.text,
-          phones: _values(_phoneControllers),
-          emails: _values(_emailControllers),
+          phones: phones,
+          emails: emails,
           location: _locationController.text,
         );
       } else {
@@ -134,13 +215,16 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
           name: _nameController.text,
           kind: _kind,
           address: _addressController.text,
-          phones: _values(_phoneControllers),
-          emails: _values(_emailControllers),
+          phones: phones,
+          emails: emails,
           location: _locationController.text,
         );
       }
+
       ref.invalidate(serviceCentersProvider);
+
       if (!mounted) return;
+
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -150,6 +234,7 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
           ),
         ),
       );
+
       context.pop();
     } catch (error, stack) {
       log.error(
@@ -157,6 +242,9 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
         error,
         stack,
       );
+
+      if (!mounted) return;
+
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -167,31 +255,16 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+      }
     }
-  }
-
-  String? _required(String? value, String label) {
-    if ((value ?? '').trim().isEmpty) return '$label requis.';
-    return null;
-  }
-
-  /// Options de villes : toutes les villes du Maroc + la ville courante si
-  /// elle n'est pas dans la liste (données saisies avant la liste officielle).
-  List<String> get _cityOptions {
-    final Set<String> options = <String>{
-      for (final MoroccoCity city in kMoroccoCities) city.name,
-    };
-    final String current = _cityController.text.trim();
-    if (current.isNotEmpty) options.add(current);
-    return options.toList()..sort(
-      (String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isAdmin = ref.watch(isAdminProvider).value ?? false;
+
     if (!isAdmin) {
       return Scaffold(
         appBar: AppBar(title: const Text('Centre de services')),
@@ -236,7 +309,7 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
+                    children: [
                       const Text(
                         'DXN Maroc — centre de services',
                         style: TextStyle(
@@ -245,37 +318,29 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
                           color: kNavy,
                         ),
                       ),
+
                       const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        initialValue: _cityController.text.trim().isEmpty
-                            ? null
-                            : _cityController.text.trim(),
+
+                      TextFormField(
+                        controller: _cityController,
+                        textCapitalization: TextCapitalization.words,
                         decoration: const InputDecoration(
                           labelText: 'Ville *',
+                          hintText: 'Ex. Casablanca, Tanger, Agadir',
                           prefixIcon: Icon(Icons.location_city_outlined),
                         ),
-                        items: <DropdownMenuItem<String>>[
-                          for (final String city in _cityOptions)
-                            DropdownMenuItem<String>(
-                              value: city,
-                              child: Text(city),
-                            ),
-                        ],
-                        onChanged: (String? value) {
-                          if (value != null) {
-                            _cityController.text = value;
-                          }
-                        },
-                        validator: (String? v) => _required(v, 'Ville'),
+                        validator: (v) => _required(v, 'Ville'),
                       ),
+
                       const SizedBox(height: 12),
+
                       DropdownButtonFormField<CenterKind>(
                         initialValue: _kind,
                         decoration: const InputDecoration(
                           labelText: 'Type du centre *',
                           prefixIcon: Icon(Icons.category_outlined),
                         ),
-                        items: const <DropdownMenuItem<CenterKind>>[
+                        items: const [
                           DropdownMenuItem<CenterKind>(
                             value: CenterKind.center,
                             child: Text('Centre de services'),
@@ -285,13 +350,15 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
                             child: Text('Branche principale'),
                           ),
                         ],
-                        onChanged: (CenterKind? value) {
+                        onChanged: (value) {
                           if (value != null) {
                             setState(() => _kind = value);
                           }
                         },
                       ),
+
                       const SizedBox(height: 12),
+
                       TextFormField(
                         controller: _nameController,
                         textCapitalization: TextCapitalization.words,
@@ -299,9 +366,11 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
                           labelText: 'Nom du centre *',
                           prefixIcon: Icon(Icons.storefront_outlined),
                         ),
-                        validator: (String? v) => _required(v, 'Nom'),
+                        validator: (v) => _required(v, 'Nom'),
                       ),
+
                       const SizedBox(height: 12),
+
                       TextFormField(
                         controller: _addressController,
                         maxLines: 2,
@@ -310,103 +379,30 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
                           prefixIcon: Icon(Icons.place_outlined),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Téléphones (plusieurs possibles)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: kNavy.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      for (int i = 0; i < _phoneControllers.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _phoneControllers[i],
-                                  keyboardType: TextInputType.phone,
-                                  decoration: InputDecoration(
-                                    labelText: 'Numéro ${i + 1}',
-                                    prefixIcon: const Icon(
-                                      Icons.phone_outlined,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (_phoneControllers.length > 1)
-                                IconButton(
-                                  tooltip: 'Retirer ce numéro',
-                                  icon: const Icon(
-                                    Icons.close,
-                                    size: 20,
-                                    color: Colors.redAccent,
-                                  ),
-                                  onPressed: () => _removePhoneField(i),
-                                ),
-                            ],
-                          ),
-                        ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          onPressed: _addPhoneField,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Ajouter un numéro'),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Emails (plusieurs possibles)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: kNavy.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      for (int i = 0; i < _emailControllers.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _emailControllers[i],
-                                  keyboardType: TextInputType.emailAddress,
-                                  decoration: InputDecoration(
-                                    labelText: 'Email ${i + 1}',
-                                    prefixIcon: const Icon(
-                                      Icons.email_outlined,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (_emailControllers.length > 1)
-                                IconButton(
-                                  tooltip: 'Retirer cet email',
-                                  icon: const Icon(
-                                    Icons.close,
-                                    size: 20,
-                                    color: Colors.redAccent,
-                                  ),
-                                  onPressed: () => _removeEmailField(i),
-                                ),
-                            ],
-                          ),
-                        ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          onPressed: _addEmailField,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Ajouter un email'),
-                        ),
-                      ),
+
                       const SizedBox(height: 12),
+
+                      _contactFields(
+                        label: 'Téléphone',
+                        icon: Icons.phone_outlined,
+                        keyboard: TextInputType.phone,
+                        controllers: _phoneControllers,
+                        addLabel: 'Ajouter un numéro de téléphone',
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      _contactFields(
+                        label: 'Email',
+                        icon: Icons.email_outlined,
+                        keyboard: TextInputType.emailAddress,
+                        controllers: _emailControllers,
+                        addLabel: 'Ajouter une adresse e-mail',
+                        validator: _validateEmail,
+                      ),
+
+                      const SizedBox(height: 12),
+
                       TextFormField(
                         controller: _locationController,
                         decoration: const InputDecoration(
@@ -415,7 +411,9 @@ class _AdminCenterFormState extends ConsumerState<AdminCenterForm> {
                           prefixIcon: Icon(Icons.map_outlined),
                         ),
                       ),
+
                       const SizedBox(height: 20),
+
                       FilledButton.icon(
                         onPressed: _saving ? null : _save,
                         icon: _saving

@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,9 +20,7 @@ class MapScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<ServiceCenter>> centersAsync = ref.watch(
-      serviceCentersProvider,
-    );
+    final centersAsync = ref.watch(serviceCentersProvider);
     final bool isAdmin = ref.watch(isAdminProvider).value ?? false;
 
     return Scaffold(
@@ -29,8 +29,8 @@ class MapScreen extends ConsumerWidget {
       extendBody: true,
       bottomNavigationBar: const FloatingNav(currentIndex: 2),
       appBar: AppBar(
-        title: const Text('Carte du Maroc'),
-        actions: <Widget>[
+        title: const Text('Carte des centres DXN Maroc'),
+        actions: [
           if (isAdmin)
             IconButton(
               tooltip: 'Ajouter un centre de services',
@@ -42,12 +42,11 @@ class MapScreen extends ConsumerWidget {
       body: SerenityBackground(
         child: centersAsync.when(
           loading: () => const LoadingPane(label: 'Chargement de la carte…'),
-          error: (Object error, _) => ErrorPane(
-            message: 'Impossible de charger la carte.',
+          error: (error, _) => ErrorPane(
+            message: 'Impossible de charger les centres de services.',
             onRetry: () => ref.invalidate(serviceCentersProvider),
           ),
-          data: (List<ServiceCenter> centers) =>
-              _MapBody(centers: centers, isAdmin: isAdmin),
+          data: (centers) => _MapBody(centers: centers, isAdmin: isAdmin),
         ),
       ),
     );
@@ -63,298 +62,452 @@ class _MapBody extends ConsumerWidget {
   void _showCityCenters(
     BuildContext context,
     WidgetRef ref,
-    String cityName,
+    String city,
     List<ServiceCenter> cityCenters,
   ) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: const Color(0xFFF8FAFC),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (BuildContext sheetContext) {
-        return SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.80,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      children: <Widget>[
-                        const Icon(Icons.location_on, color: kDeepTeal),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Centres de services — $cityName',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: kNavy,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (cityCenters.isEmpty) ...<Widget>[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 8,
-                      ),
-                      child: const Text(
-                        'Aucun centre de services dans cette ville pour le moment.',
-                        style: TextStyle(color: Colors.black54),
-                      ),
-                    ),
-                    if (isAdmin)
-                      FilledButton.tonalIcon(
-                        onPressed: () {
-                          Navigator.pop(sheetContext);
-                          context.push(
-                            Uri(
-                              path: '/admin/center/new',
-                              queryParameters: <String, String>{
-                                'city': cityName,
-                              },
-                            ).toString(),
-                          );
-                        },
-                        icon: const Icon(
-                          Icons.add_location_alt_outlined,
-                          size: 18,
-                        ),
-                        label: Text('Ajouter un centre à $cityName'),
-                      ),
-                  ] else
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        itemCount: cityCenters.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 14),
-                        itemBuilder: (BuildContext _, int index) {
-                          final ServiceCenter center = cityCenters[index];
-                          return _CenterTile(
-                            center: center,
-                            isAdmin: isAdmin,
-                            onEdit: isAdmin
-                                ? () {
-                                    Navigator.pop(sheetContext);
-                                    context.push(
-                                      '/admin/center/edit',
-                                      extra: center,
-                                    );
-                                  }
-                                : null,
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
+    log.info(
+      'Ouverture du popup des centres de services — $city '
+      '(${cityCenters.length} centre(s))',
+    );
+
+    _showBlurredPopup(
+      context,
+      Material(
+        type: MaterialType.transparency,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.80,
           ),
-        );
-      },
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on, color: kDeepTeal),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Centres de services — $city',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: kNavy,
+                        ),
+                      ),
+                    ),
+
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Fermer',
+                      icon: const Icon(Icons.close, size: 20, color: kNavy),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemCount: cityCenters.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 14),
+                  itemBuilder: (_, index) {
+                    final center = cityCenters[index];
+
+                    return _CenterTile(
+                      center: center,
+                      isAdmin: isAdmin,
+                      onEdit: isAdmin
+                          ? () {
+                              Navigator.pop(context);
+
+                              context.push('/admin/center/edit', extra: center);
+                            }
+                          : null,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Arrière-plan flouté partagé par tous les popups de la carte.
+  void _showBlurredPopup(BuildContext context, Widget content) {
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Fermer',
+      barrierColor: Colors.transparent,
+      pageBuilder: (_, _, _) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          color: kNavy.withValues(alpha: 0.35),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.all(24),
+          child: content,
+        ),
+      ),
+    );
+  }
+
+  void _showCitiesPopup(
+    BuildContext context,
+    WidgetRef ref,
+    List<MapEntry<String, List<ServiceCenter>>> entries,
+  ) {
+    log.info('Ouverture de la liste des villes (${entries.length})');
+
+    _showBlurredPopup(
+      context,
+      Material(
+        type: MaterialType.transparency,
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width * 0.9,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.60,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_city, color: kDeepTeal),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Villes du Maroc (${entries.length})',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: kNavy,
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Fermer',
+                      icon: const Icon(Icons.close, size: 20, color: kNavy),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemCount: entries.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  itemBuilder: (_, index) {
+                    final entry = entries[index];
+
+                    return InkWell(
+                      onTap: () {
+                        Navigator.pop(context);
+
+                        _showCityCenters(context, ref, entry.key, entry.value);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on,
+                              size: 18,
+                              color: kDeepTeal,
+                            ),
+
+                            const SizedBox(width: 10),
+
+                            Expanded(
+                              child: Text(
+                                entry.key,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: kNavy,
+                                ),
+                              ),
+                            ),
+
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: kWarmMist,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '${entry.value.length}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: kDeepTeal,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final Map<String, List<ServiceCenter>> byCityKey = groupCentersByCity(
-      centers,
-    );
+    final byCity = groupCentersByCity(centers);
+    final entries = byCity.entries.toList();
 
-    // Un marqueur par ville du Maroc, avec badge si la ville a des centres.
-    final List<Marker> markers = <Marker>[];
-    for (final MoroccoCity city in kMoroccoCities) {
-      final List<ServiceCenter> cityCenters =
-          byCityKey[normalizeCityKey(city.name)] ?? const <ServiceCenter>[];
+    final List<Marker> markers = [];
+
+    for (final entry in entries) {
+      final LatLng? coords = coordsForCity(entry.key);
+
+      if (coords == null) continue;
+
       markers.add(
         Marker(
-          point: city.position,
+          point: coords,
           width: 48,
           height: 54,
           alignment: Alignment.topCenter,
           child: GestureDetector(
-            onTap: () => _showCityCenters(context, ref, city.name, cityCenters),
-            child: _CityPin(cityName: city.name, count: cityCenters.length),
-          ),
-        ),
-      );
-    }
-
-    // Villes saisies avant la liste officielle (repli, sans coordonnées).
-    final List<MapEntry<String, List<ServiceCenter>>> unmappedEntries =
-        byCityKey.entries
-            .where(
-              (MapEntry<String, List<ServiceCenter>> entry) =>
-                  moroccoCityByName(entry.value.first.city) == null,
-            )
-            .toList(growable: false);
-
-    return Column(
-      children: <Widget>[
-        SizedBox(height: MediaQuery.paddingOf(context).top + kToolbarHeight),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
+            onTap: () => _showCityCenters(context, ref, entry.key, entry.value),
+            child: Tooltip(
+              message: '${entry.key} (${entry.value.length})',
               child: Stack(
-                children: <Widget>[
-                  FlutterMap(
-                    options: const MapOptions(
-                      initialCenter: MapScreen._moroccoCenter,
-                      initialZoom: 5.4,
-                      minZoom: 4.5,
-                      maxZoom: 12,
-                    ),
-                    children: <Widget>[
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.dxn.social_profile_app_dxn',
-                      ),
-                      MarkerLayer(markers: markers),
-                      const RichAttributionWidget(
-                        attributions: <SourceAttribution>[
-                          TextSourceAttribution('© OpenStreetMap contributors'),
-                        ],
+                alignment: Alignment.topCenter,
+                children: [
+                  const Icon(
+                    Icons.location_on,
+                    size: 48,
+                    color: kDeepTeal,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black38,
+                        blurRadius: 6,
+                        offset: Offset(0, 3),
                       ),
                     ],
                   ),
-                  if (unmappedEntries.isNotEmpty)
-                    Positioned(
-                      left: 8,
-                      right: 8,
-                      bottom: 8,
-                      child: IgnorePointer(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            'Villes non localisées : '
-                            '${unmappedEntries.map((MapEntry<String, List<ServiceCenter>> e) => e.value.first.city).join(', ')}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.black54,
-                            ),
+                  Positioned(
+                    top: 8,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${entry.value.length}',
+                          style: const TextStyle(
+                            color: kDeepTeal,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            height: 1,
                           ),
                         ),
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
           ),
         ),
-        if (unmappedEntries.isNotEmpty)
-          SizedBox(
-            height: 54,
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              scrollDirection: Axis.horizontal,
-              itemCount: unmappedEntries.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (BuildContext _, int index) {
-                final MapEntry<String, List<ServiceCenter>> entry =
-                    unmappedEntries[index];
-                return ActionChip(
-                  avatar: const Icon(Icons.place, size: 16, color: kDeepTeal),
-                  label: Text(
-                    '${entry.value.first.city} (${entry.value.length})',
-                  ),
-                  onPressed: () => _showCityCenters(
-                    context,
-                    ref,
-                    entry.value.first.city,
-                    entry.value,
-                  ),
-                );
-              },
+      );
+    }
+
+    final unmappedCities = entries
+        .where((entry) => coordsForCity(entry.key) == null)
+        .map((entry) => entry.key)
+        .toList();
+
+    log.debug('Carte affichée avec un décalage vertical de 48 px');
+
+    return Column(
+      children: [
+        // La carte est davantage décalée sous l'AppBar translucide.
+
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 32, 12, 0),
+            child: Transform.translate(
+              offset: const Offset(0, 16),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Stack(
+                  children: [
+                    FlutterMap(
+                      options: MapOptions(
+                        initialCenter: MapScreen._moroccoCenter,
+                        initialZoom: 5.4,
+                        minZoom: 4.5,
+                        maxZoom: 12,
+                        // Carte du Maroc uniquement : la caméra ne
+                        // peut pas quitter les frontières du Maroc.
+                        cameraConstraint: CameraConstraint.contain(
+                          bounds: LatLngBounds(
+                            const LatLng(20.8, -17.3),
+                            const LatLng(36.2, -0.9),
+                          ),
+                        ),
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName:
+                              'com.dxn.social_profile_app_dxn',
+                        ),
+                        MarkerLayer(markers: markers),
+                        const RichAttributionWidget(
+                          attributions: [
+                            TextSourceAttribution(
+                              '© OpenStreetMap contributors',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    if (centers.isEmpty)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'Aucun centre de services pour le moment.',
+                                style: TextStyle(color: kNavy),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Liste des villes : un seul bouton superposé sur la
+                    // carte, remonté au-dessus du FloatingNav (la carte
+                    // est décalée de 16 px vers le bas).
+                    if (entries.isNotEmpty)
+                      Positioned(
+                        left: 12,
+                        right: 12,
+                        bottom: 32,
+                        child: Center(
+                          child: Material(
+                            color: Colors.white,
+                            elevation: 3,
+                            shadowColor: Colors.black26,
+                            borderRadius: BorderRadius.circular(999),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(999),
+                              onTap: () =>
+                                  _showCitiesPopup(context, ref, entries),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 11,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.location_city,
+                                      size: 18,
+                                      color: kDeepTeal,
+                                    ),
+
+                                    const SizedBox(width: 8),
+
+                                    Text(
+                                      'Villes du Maroc (${entries.length})',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: kDeepTeal,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
+        ),
+
+        if (unmappedCities.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Text(
+              'Position approximative non disponible pour : '
+              '${unmappedCities.join(', ')} '
+              '(ouvrez la liste des villes pour les consulter).',
+              style: const TextStyle(fontSize: 11, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+          ),
+
         const SizedBox(height: 72),
       ],
-    );
-  }
-}
-
-class _CityPin extends StatelessWidget {
-  const _CityPin({required this.cityName, required this.count});
-
-  final String cityName;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool hasCenters = count > 0;
-    return Tooltip(
-      message: hasCenters ? '$cityName ($count)' : cityName,
-      child: Stack(
-        alignment: Alignment.topCenter,
-        children: <Widget>[
-          Icon(
-            Icons.location_on,
-            size: hasCenters ? 46 : 34,
-            color: hasCenters ? kDeepTeal : kMintTeal,
-            shadows: const <Shadow>[
-              Shadow(
-                color: Colors.black38,
-                blurRadius: 6,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          if (hasCenters)
-            Positioned(
-              top: 7,
-              child: Container(
-                width: 20,
-                height: 20,
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    '$count',
-                    style: const TextStyle(
-                      color: kDeepTeal,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                      height: 1,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
@@ -369,6 +522,7 @@ class _CenterTile extends ConsumerWidget {
   Future<void> _launchUri(BuildContext context, Uri uri) async {
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!context.mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Impossible d\'ouvrir le lien.')),
       );
@@ -377,17 +531,23 @@ class _CenterTile extends ConsumerWidget {
 
   Uri buildMapsUri(ServiceCenter center) {
     final String raw = center.location?.trim() ?? '';
+
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
       final Uri? parsed = Uri.tryParse(raw);
-      if (parsed != null) return parsed;
+
+      if (parsed != null) {
+        return parsed;
+      }
     }
+
     if (raw.isNotEmpty) {
-      return Uri.https('www.google.com', '/maps/search/', <String, String>{
+      return Uri.https('www.google.com', '/maps/search/', {
         'api': '1',
         'query': raw,
       });
     }
-    return Uri.https('www.google.com', '/maps/search/', <String, String>{
+
+    return Uri.https('www.google.com', '/maps/search/', {
       'api': '1',
       'query': '${center.city}, Maroc',
     });
@@ -401,7 +561,7 @@ class _CenterTile extends ConsumerWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const <BoxShadow>[
+        boxShadow: const [
           BoxShadow(
             color: Color(0x0A000000),
             blurRadius: 8,
@@ -411,9 +571,9 @@ class _CenterTile extends ConsumerWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
+        children: [
           Row(
-            children: <Widget>[
+            children: [
               Icon(
                 center.kind == CenterKind.branch
                     ? Icons.corporate_fare
@@ -421,7 +581,9 @@ class _CenterTile extends ConsumerWidget {
                 size: 16,
                 color: kMintTeal,
               ),
+
               const SizedBox(width: 6),
+
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
@@ -437,14 +599,17 @@ class _CenterTile extends ConsumerWidget {
                   ),
                 ),
               ),
+
               const Spacer(),
-              if (isAdmin) ...<Widget>[
+
+              if (isAdmin) ...[
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   tooltip: 'Modifier',
                   icon: const Icon(Icons.edit_outlined, size: 20, color: kNavy),
                   onPressed: onEdit,
                 ),
+
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   tooltip: 'Supprimer',
@@ -454,12 +619,12 @@ class _CenterTile extends ConsumerWidget {
                     color: Colors.redAccent,
                   ),
                   onPressed: () async {
-                    final bool? confirmed = await showDialog<bool>(
+                    final confirmed = await showDialog<bool>(
                       context: context,
-                      builder: (BuildContext dialogContext) => AlertDialog(
+                      builder: (dialogContext) => AlertDialog(
                         title: const Text('Supprimer ce centre ?'),
                         content: Text(center.name),
-                        actions: <Widget>[
+                        actions: [
                           TextButton(
                             onPressed: () =>
                                 Navigator.pop(dialogContext, false),
@@ -472,13 +637,20 @@ class _CenterTile extends ConsumerWidget {
                         ],
                       ),
                     );
-                    if (confirmed != true || !context.mounted) return;
+
+                    if (confirmed != true || !context.mounted) {
+                      return;
+                    }
+
                     try {
                       await ref
                           .read(serviceCentersRepositoryProvider)
                           .deleteCenter(center.id);
+
                       ref.invalidate(serviceCentersProvider);
+
                       if (!context.mounted) return;
+
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Centre supprimé.')),
                       );
@@ -488,7 +660,9 @@ class _CenterTile extends ConsumerWidget {
                         error,
                         stack,
                       );
+
                       if (!context.mounted) return;
+
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Suppression impossible.'),
@@ -500,7 +674,9 @@ class _CenterTile extends ConsumerWidget {
               ],
             ],
           ),
+
           const SizedBox(height: 8),
+
           Text(
             center.name,
             style: const TextStyle(
@@ -509,7 +685,10 @@ class _CenterTile extends ConsumerWidget {
               color: kNavy,
             ),
           ),
+
           const SizedBox(height: 4),
+
+          // ADRESSE
           if ((center.address ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -522,50 +701,58 @@ class _CenterTile extends ConsumerWidget {
                 ),
               ),
             ),
+
+          // TOUS LES NUMEROS DE TELEPHONE
           for (final String phone in center.phones)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: InkWell(
                 onTap: () =>
-                    _launchUri(context, Uri(scheme: 'tel', path: phone.trim())),
+                    _launchUri(context, Uri(scheme: 'tel', path: phone)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
+                  children: [
                     const Icon(
                       Icons.phone_outlined,
                       size: 14,
                       color: kDeepTeal,
                     ),
+
                     const SizedBox(width: 4),
-                    Text(
-                      phone,
-                      style: const TextStyle(
-                        color: kDeepTeal,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
+
+                    Flexible(
+                      child: Text(
+                        phone,
+                        style: const TextStyle(
+                          color: kDeepTeal,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
+
+          // TOUTES LES ADRESSES EMAIL
           for (final String email in center.emails)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: InkWell(
-                onTap: () => _launchUri(
-                  context,
-                  Uri(scheme: 'mailto', path: email.trim()),
-                ),
+                onTap: () =>
+                    _launchUri(context, Uri(scheme: 'mailto', path: email)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
+                  children: [
                     const Icon(
                       Icons.email_outlined,
                       size: 14,
                       color: kDeepTeal,
                     ),
+
                     const SizedBox(width: 4),
+
                     Flexible(
                       child: Text(
                         email,
@@ -576,7 +763,9 @@ class _CenterTile extends ConsumerWidget {
                 ),
               ),
             ),
+
           const SizedBox(height: 14),
+
           FilledButton.tonalIcon(
             onPressed: () => _launchUri(context, buildMapsUri(center)),
             icon: const Icon(Icons.open_in_new, size: 18),

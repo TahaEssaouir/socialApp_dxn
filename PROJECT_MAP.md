@@ -409,36 +409,19 @@ de poster, recherche, filtres plateforme, édition de profil.
 Prérequis M1 : installer la CLI Supabase (P-19) ; Docker est déjà présent.
 Aucun code de production supplémentaire ne sera écrit avant cet accord.
 
----
 
-## [POST-M7] Fonctionnalités ajoutées après le plan initial
+## [AJOUT 2026-11-10] Fonctionnalité Carte des centres de services (Maroc)
 
-> Section de suivi des évolutions livrées après M7 (implémentées, testées localement).
+- **Écran** /map (bouton Carte, index 2 du FloatingNav) : carte OpenStreetMap **strictement limitée au Maroc** (CameraConstraint.contain sur les bounds Maroc, zoom 4,5–12) ; les bornes ne peuvent pas quitter les frontières marocaines ; marqueurs par ville + chips de villes.
+- **Table** service_centers : contacts multiples en **tableaux** phones text[] / emails text[] (nouvelle migration **0014_service_centers_array_contacts.sql**, les anciennes colonnes phone/email texte sont supprimées ; contraintes « pas d'éléments vides »).
+- **Formulaire admin** (/admin/center/new et /admin/center/edit) : plusieurs téléphones/e-mails (ajout/suppression de champs), type kind (centre / branche principale), location (lien Google Maps).
+- **Affichage popup ville** : badge du type, adresse, chaque téléphone cliquable (	el:), chaque e-mail cliquable (mailto:), bouton « Ouvrir dans Google Maps » (lien location ou recherche texte en secours).
+- **Correctif** : « Ajout/Modification impossible » + tel/e-mail invisibles causaient par l'écart schéma (colonnes tableau en DB) vs code (colonnes texte) ; corrigé via buildPayload/tableaux + ServiceCenter.phones/.emails en List<String> + sanitizeCenterContacts (nettoyage + dé doublement).
+- **Tests** : 	est/service_center_test.dart (TDD) — 22/22 passent.
 
-| Fonctionnalité | Détail | Fichiers / migrations |
-|---|---|---|
-| Explications | Catégorie `post_kind = 'explication'` : nom + lien Google Drive, tuiles cliquables. | `0008` (reel_videos) réutilisée, `posts_repository.dart`, `profile_screen.dart` |
-| Liens sociaux + externes | Colonnes `facebook_link` / `instagram_link` sur `posts` + lien externe du profil ; reels vidéo (fichiers vidéo autorisés). | `0002_add_social_link_to_posts.sql`, `0007_add_external_link.sql`, `0007/0008_reel_videos.sql` |
-| Likes « J'aime » persistants | Un seul cœur (toggle Instagram), **persisté en base** : `post_likes (post_id, device_id)`, trigger qui maintient `posts.likes_count`, RPC `toggle_post_like` / `get_liked_post_ids` en `security definer` ; identifiant anonyme par appareil (`SharedPreferences`). | `0010_post_likes.sql`, `likes_repository.dart`, `device_id.dart` |
-| Followers Facebook manuels | `social_stats.source = 'manual'` : saisie admin (« Modifier les followers manuellement »), jamais écrasée par `refresh-stats` (l'Edge Function saute les plateformes `manual`). | `0011_manual_social_stats.sql`, `profile_repository.dart`, `refresh-stats/index.ts` |
-| Avatar admin | Badge « + » sur l'avatar → upload galerie (JPEG/PNG/WebP ≤ 10 Mo) vers le bucket `avatars` (écriture admin seule), rafraîchissement Realtime. | `0009_avatars_bucket.sql`, `profile_repository.dart` |
-| Carte du Maroc | Onglet « Carte » du menu bas : carte OpenStreetMap (`flutter_map` + `latlong2`) affichant **toutes les villes du Maroc** (~49, liste `kMoroccoCities`). Ville avec centres = marqueur teal foncé + badge du nombre ; ville sans centre = marqueur clair. Tap → popup listant les centres (nom, type Centre/Branche, adresse, **téléphones multiples**, **emails multiples**, bouton « Ouvrir dans Google Maps »). Admin : ajout/modification/suppression depuis le popup ou `/admin/center/*`. | `0012_service_centers.sql`, `0013_service_center_details.sql`, `0014_service_center_contacts.sql`, `map_screen.dart`, `admin_center_form.dart`, `service_centers_repository.dart` |
-| Contacts multiples par centre | `service_centers.phones` / `emails` en `text[]` (ancien texte séparé par « / » converti en éléments distincts) ; formulaire admin avec champs dynamiques « Ajouter un numéro / un email ». Ville en liste déroulante (villes officielles + valeur courante). | `0014_service_center_contacts.sql`, `admin_center_form.dart` |
+- **[2026-11-10] UI carte agrandie** : la rangée de chips villes est remplacée par un **bouton unique « Villes du Maroc (n) » superposé en bas de la carte** (la carte Expanded récupère la hauteur des chips) ; le bouton ouvre un **popup flouté** (BackdropFilter sigma 8, helper partagé _showBlurredPopup) listant les villes (nom + badge du nombre de centres) ; la **liste des centres de services est désormais un popup centré flouté** (l'ancien showModalBottomSheet est remplacé, contenu _CenterTile inchangé). Journalisation log.info à l'ouverture des popups. Tests : 	est/map_screen_test.dart (4 tests TDD) — 26/26 passent.
 
-### Écart de migrations local
+- **[2026-11-10] Carte en pleine hauteur + fermeture du popup villes** : le SizedBox d'espacement supérieur de _MapBody (statut + toolbar) est supprimé — la carte commence derrière l'AppBar translucide (aucune bande vide, allongement ≈ 90 px) ; l'en-tête du popup « Villes du Maroc » reçoit un **bouton fermer (✕)** (Navigator.pop). Tests 26/26.
+- **[2026-11-10] Décalage vertical de la carte** : la carte est décalée de 48 px sous l'AppBar translucide et sa hauteur visuelle est augmentée de 8 px ; journalisation `log.debug` ajoutée. Test dédié dans `test/map_screen_test.dart`.
 
-Le registre local `supabase_migrations.schema_migrations` est désynchronisé :
-`supabase migration up` échoue (tentative de réapplication de `0002_rls`).
-Les migrations récentes sont donc appliquées manuellement puis enregistrées :
-
-```powershell
-Get-Content supabase\migrations\<fichier>.sql -Raw |
-  docker exec -i supabase_db_social_profile_app_dxnn psql -U postgres -d postgres -v ON_ERROR_STOP=1
-docker exec supabase_db_social_profile_app_dxnn psql -U postgres -d postgres `
-  -c "insert into supabase_migrations.schema_migrations (version, name) values ('0014', 'service_center_contacts') on conflict do nothing;"
-```
-
-Versions enregistrées localement : `0009` avatars_bucket, `0010` post_likes,
-`0011` manual_social_stats, `0012` service_centers, `0013` service_center_details,
-`0014` service_center_contacts. **Pour un déploiement distant : pousser 0009 → 0014 puis redéployer `refresh-stats`.**
-
+- **[2026-11-10] Fermeture du popup centres + bouton villes dégagé du nav** : l'en-tête du popup « Centres de services — {ville} » reçoit à son tour un **bouton fermer (✕)** (même style que « Villes du Maroc ») ; le bouton « Villes du Maroc (n) » passe de ottom: 12 à ottom: 32 — avec le décalage vertical de 16 px de la carte (session parallèle), il chevauchait le haut du FloatingNav (~70 px, extendBody: true). Tests 27/27.
